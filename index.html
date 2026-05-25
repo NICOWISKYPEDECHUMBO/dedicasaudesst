@@ -856,20 +856,39 @@ async function saveUrl() {
   SCRIPT_URL = url;
   localStorage.setItem('cronograma_url', url);
   hideBanner(); closeCfg();
-  toast('Enviando dados para o Google Sheets...');
-  setSync('syncing', 'Enviando dados...');
+
+  // PRIMEIRO tenta carregar o que já tem no Sheets
+  setSync('syncing', 'Verificando banco...');
+  toast('Conectando ao banco de dados...');
   try {
-    const r = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'save', records })
-    });
+    const r = await fetch(SCRIPT_URL + '?action=load');
     const data = await r.json();
-    if (data.ok) {
+    if (data.ok && data.records && data.records.length > 0) {
+      // Sheets já tem dados — carrega sem sobrescrever
+      records = data.records.map(normalizarDatasRecord);
+      saveLocal();
       setSync('', 'Sincronizado ✓');
-      toast('✅ ' + records.length + ' empresas enviadas para o Google Sheets!');
-    } else { throw new Error(); }
+      renderTable();
+      toast('✅ ' + records.length + ' empresas carregadas do banco!');
+      return;
+    }
+    // Sheets vazio — só aí envia os dados locais
+    if (records.length > 0) {
+      const r2 = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'save', records })
+      });
+      const d2 = await r2.json();
+      if (d2.ok) {
+        setSync('', 'Sincronizado ✓');
+        toast('✅ ' + records.length + ' empresas enviadas para o banco!');
+      } else throw new Error();
+    } else {
+      setSync('', 'Banco conectado ✓');
+      toast('✅ Banco conectado! Adicione empresas ou importe uma planilha.');
+    }
   } catch(e) {
-    setSync('error', 'Erro ao enviar');
+    setSync('error', 'Erro ao conectar');
     toast('Erro ao conectar. Verifique a URL.');
   }
 }
