@@ -622,7 +622,7 @@ function resp(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById('1N03p1ArGdLTvfW0vdlp7GirxruXD-3laNvr70SNnYd0');
   let sh = ss.getSheetByName(SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(SHEET_NAME);
