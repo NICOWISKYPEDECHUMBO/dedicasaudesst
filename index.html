@@ -1331,9 +1331,13 @@ function importarPlanilha(input) {
       if (!confirm(`Importar ${imported.length} empresas da aba "${sheetName}"?\n\nIsso vai SUBSTITUIR os dados atuais.`)) return;
 
       records = imported;
-      scheduleSave();
+      saveLocal();
       renderTable();
-      toast(`✅ ${imported.length} empresas importadas com sucesso!`);
+      toast(`✅ ${imported.length} empresas importadas! Enviando para o banco...`);
+      // Envia imediatamente pro Google Sheets sem esperar o timer
+      saveToSheets().then(() => {
+        toast(`✅ ${imported.length} empresas salvas no banco de dados!`);
+      });
     } catch(err) {
       alert('Erro ao ler planilha: ' + err.message);
       console.error(err);
