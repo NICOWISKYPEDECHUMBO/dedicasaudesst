@@ -489,7 +489,7 @@
         <b>Abra o Apps Script: Extensões → Apps Script</b>
         <p>Apague o código que aparecer e cole o código abaixo:</p>
         <code id="script-code" onclick="copyScript()" title="Clique para copiar">Clique para ver o código</code>
-        <p style="margin-top:5px"><a onclick="copyScript()" style="color:#1e40af;cursor:pointer;font-weight:600">📋 Clique para copiar o código</a></p>
+        <p style="margin-top:5px"><a onclick="copyScript()" style="color:#1e40af;cursor:pointer;font-weight:600">⬇️ Clique para baixar o arquivo Codigo.gs</a></p>
       </div>
     </div>
     <div class="step">
@@ -604,15 +604,14 @@
 </div>
 
 <script>
-const APPS_SCRIPT = `const SHEET_NAME = 'Dados';
-
+const APPS_SCRIPT = `var SHEET_NAME = 'Dados';
 function doGet(e) {
   if (e.parameter.action === 'load') return load();
   return resp({ok:false});
 }
 function doPost(e) {
   try {
-    const body = JSON.parse(e.postData.contents);
+    var body = JSON.parse(e.postData.contents);
     if (body.action === 'save') return save(body.records);
   } catch(err) {}
   return resp({ok:false});
@@ -622,14 +621,14 @@ function resp(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(SHEET_NAME);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(SHEET_NAME);
     sh.appendRow(['id','finalizado','respComercial','respDoc','dataContrato','pgtoSinal',
       'tipoContrato','empresa','fantasia','dataVistoria','bairro','respVistoria','contatoVistoria',
       'planilha','procuracao','soc','checklist','nr1psico',
-      'nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao','eventos']);
+      'nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao','eventos','createdAt']);
   }
   return sh;
 }
@@ -638,26 +637,26 @@ function fmtDate(v) {
   if (v instanceof Date) {
     var y = v.getFullYear(), m = v.getMonth()+1, d = v.getDate();
     if (y < 1900) return '';
-    return y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
+    return y+'-'+(m<10?'0'+m:String(m))+'-'+(d<10?'0'+d:String(d));
   }
   var s = String(v).trim();
   if (!s || s === '0') return '';
-  // already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
-  // DD/MM/YYYY
-  var m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (m2) return m2[3]+'-'+(m2[2].length<2?'0':'')+m2[2]+'-'+(m2[1].length<2?'0':'')+m2[1];
+  if (s.length >= 10 && s.charAt(4) === '-' && s.charAt(7) === '-') return s.slice(0,10);
+  var parts = s.split('/');
+  if (parts.length === 3 && parts[2].length === 4) {
+    return parts[2]+'-'+(parts[1].length<2?'0':'')+parts[1]+'-'+(parts[0].length<2?'0':'')+parts[0];
+  }
   return s;
 }
 var DATE_COLS = ['dataContrato','dataVistoria','planilha','procuracao','soc',
   'checklist','nr1psico','nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao'];
 function load() {
-  const sh = getSheet();
-  const data = sh.getDataRange().getValues();
-  const headers = data[0];
-  const records = data.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h,i) => {
+  var sh = getSheet();
+  var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  var records = data.slice(1).map(function(row) {
+    var obj = {};
+    headers.forEach(function(h, i) {
       var v = row[i];
       if (v === true || v === false) { obj[h] = v; return; }
       if (DATE_COLS.indexOf(h) >= 0) { obj[h] = fmtDate(v); return; }
@@ -666,16 +665,18 @@ function load() {
     obj.finalizado = obj.finalizado === true || obj.finalizado === 'true';
     return obj;
   });
-  return resp({ok:true, records});
+  return resp({ok:true, records:records});
 }
 function save(records) {
-  const sh = getSheet();
-  const headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
-  const rows = records.map(r => headers.map(h => r[h] !== undefined ? r[h] : ''));
+  var sh = getSheet();
+  var headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+  var rows = records.map(function(r) {
+    return headers.map(function(h) { return r[h] !== undefined ? r[h] : ''; });
+  });
   if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow()-1);
   if (rows.length) sh.getRange(2,1,rows.length,headers.length).setValues(rows);
   return resp({ok:true});
-}`;
+}`
 
 let records = [];
 let SCRIPT_URL = localStorage.getItem('cronograma_url') || '';
@@ -837,13 +838,14 @@ function openCfg() {
 function closeCfg() { document.getElementById('modal-cfg').classList.remove('open'); }
 
 function copyScript() {
-  navigator.clipboard.writeText(APPS_SCRIPT)
-    .then(() => toast('Código copiado!'))
-    .catch(() => {
-      const ta = document.createElement('textarea');
-      ta.value = APPS_SCRIPT; document.body.appendChild(ta); ta.select();
-      document.execCommand('copy'); document.body.removeChild(ta); toast('Código copiado!');
-    });
+  // Baixa como arquivo .gs para evitar corrupção de caracteres ao copiar
+  const blob = new Blob([APPS_SCRIPT], {type: 'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'Codigo.gs';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('Arquivo Codigo.gs baixado! Cole no Apps Script.');
 }
 
 async function saveUrl() {
