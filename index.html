@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cronograma de Atendimento</title>
+<style>
+  :root {
+    --verde: #1a7a52; --verde-light: #e6f4ef; --verde-mid: #2ea87a;
+    --cinza-borda: #e5e7eb; --cinza-light: #f3f4f6;
+    --texto: #111827; --texto-muted: #6b7280;
+    --azul-vistoria: #3a1555;
+    --header-h: 64px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; background: #f0f2f5; color: var(--texto); }
+
+  header {
+    position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+    background: var(--verde); color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; }
+  .logo svg { width: 24px; height: 24px; }
+  .header-right { display: flex; align-items: center; gap: 20px; }
+  .header-stats { display: flex; gap: 20px; }
+  .hstat { text-align: center; }
+  .hstat .val { font-size: 20px; font-weight: 700; line-height: 1; }
+  .hstat .lbl { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .btn-new {
+    background: rgba(255,255,255,0.18); border: 1.5px solid rgba(255,255,255,0.5);
+    color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-new:hover { background: rgba(255,255,255,0.28); }
+  .btn-import {
+    background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.35);
+    color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-import:hover { background: rgba(255,255,255,0.22); }
+  #file-input { display: none; }
+  #sync-status { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: 0.85; white-space: nowrap; }
+  #sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #6ee7b7; flex-shrink: 0; }
+  #sync-dot.syncing { background: #facc15; animation: pulse 0.8s infinite alternate; }
+  #sync-dot.error { background: #f87171; }
+  @keyframes pulse { from { opacity:1; } to { opacity:0.3; } }
+
+  #config-banner {
+    position: fixed; top: var(--header-h); left: 0; right: 0; z-index: 998;
+    background: #fef3c7; border-bottom: 2px solid #f59e0b;
+    padding: 10px 20px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #config-banner b { color: #92400e; }
+  #config-banner a { color: #1e40af; text-decoration: underline; cursor: pointer; font-weight: 600; }
+  #config-banner .dismiss { margin-left: auto; cursor: pointer; font-size: 20px; color: #92400e; line-height: 1; }
+
+  .toolbar {
+    position: fixed; left: 0; right: 0; z-index: 997;
+    background: #fff; border-bottom: 1px solid var(--cinza-borda);
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px; flex-wrap: wrap;
+  }
+  .toolbar input[type=text] {
+    border: 1px solid var(--cinza-borda); border-radius: 7px;
+    padding: 6px 10px 6px 32px; font-size: 13px; width: 220px; outline: none;
+    background: var(--cinza-light) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' fill='none' stroke='%236b7280' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 9px center;
+  }
+  .toolbar input[type=text]:focus { border-color: var(--verde-mid); background-color: #fff; }
+  .toolbar select { border: 1px solid var(--cinza-borda); border-radius: 7px; padding: 6px 10px; font-size: 13px; background: var(--cinza-light); outline: none; cursor: pointer; }
+  .toolbar select:focus { border-color: var(--verde-mid); }
+  .toolbar-info { margin-left: auto; font-size: 12px; color: var(--texto-muted); }
+  .btn-cfg { background: none; border: 1px solid var(--cinza-borda); border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--texto-muted); display: flex; align-items: center; gap: 5px; }
+  .btn-cfg:hover { background: var(--cinza-light); }
+
+  /* BOTÃO RELATÓRIO */
+  .btn-relatorio {
+    background: #1e40af; border: none; border-radius: 7px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600; cursor: pointer; color: #fff;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .btn-relatorio:hover { background: #1d3a9a; }
+
+  /* ALERTA PRAZO */
+  .alert-prazo {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 7000; display: none; align-items: center; justify-content: center;
+  }
+  .alert-prazo.open { display: flex; }
+  .alert-box {
+    background: #fff; border-radius: 14px; padding: 28px 32px; max-width: 600px; width: 95%;
+    max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  }
+  .alert-box h3 { font-size: 18px; margin-bottom: 4px; color: #dc2626; display: flex; align-items: center; gap: 8px; }
+  .alert-box .sub { font-size: 12px; color: var(--texto-muted); margin-bottom: 16px; }
+  .alert-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; border-radius: 8px; margin-bottom: 8px;
+    border-left: 4px solid;
+  }
+  .alert-item.critico { background: #fef2f2; border-color: #dc2626; }
+  .alert-item.atencao { background: #fff7ed; border-color: #f59e0b; }
+  .alert-item-info { flex: 1; }
+  .alert-item-info b { display: block; font-size: 13px; }
+  .alert-item-info span { font-size: 11px; color: var(--texto-muted); }
+  .alert-badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .alert-badge.critico { background: #dc2626; color: #fff; }
+  .alert-badge.atencao { background: #f59e0b; color: #fff; }
+  .alert-close { margin-top: 16px; text-align: right; }
+  .alert-close button { background: var(--cinza-light); border: none; border-radius: 8px; padding: 8px 20px; font-size: 13px; cursor: pointer; font-weight: 600; }
+
+  /* MODAL RELATÓRIO */
+  .rel-back { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 7000; display: none; align-items: center; justify-content: center; }
+  .rel-back.open { display: flex; }
+  .rel-box { background: #fff; border-radius: 14px; padding: 28px 32px; max-width: 700px; width: 95%; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
+  .rel-box h3 { font-size: 18px; margin-bottom: 4px; color: #1e40af; }
+  .rel-box .sub { font-size: 12px; color: var(--texto-muted); margin-bottom: 16px; }
+  .rel-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .rel-btn { background: var(--cinza-light); border: 1.5px solid var(--cinza-borda); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-weight: 600; color: var(--texto); transition: all 0.15s; }
+  .rel-btn:hover { border-color: #1e40af; color: #1e40af; }
+  .rel-btn.active { background: #1e40af; color: #fff; border-color: #1e40af; }
+  .rel-results { border: 1px solid var(--cinza-borda); border-radius: 8px; overflow: hidden; }
+  .rel-results table { width: 100%; border-collapse: collapse; }
+  .rel-results th { background: #1f2d40; color: #fff; font-size: 11px; padding: 8px 10px; text-align: left; }
+  .rel-results td { padding: 7px 10px; font-size: 12px; border-bottom: 1px solid var(--cinza-borda); }
+  .rel-results tr:last-child td { border-bottom: none; }
+  .rel-results tr:hover td { background: #f8faff; }
+  .rel-empty { text-align: center; padding: 30px; color: var(--texto-muted); font-size: 13px; }
+  .rel-count { font-size: 12px; color: var(--texto-muted); margin-bottom: 8px; }
+
+  /* BADGE ALERTA NA TABELA */
+  tr.prazo-critico td { background: #fff5f5 !important; }
+  tr.prazo-atencao td { background: #fffbeb !important; }
+  .prazo-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; display: inline-block; margin-left: 4px; }
+  .prazo-badge.critico { background: #dc2626; color: #fff; }
+  .prazo-badge.atencao { background: #f59e0b; color: #fff; }
+
+  .table-wrap { overflow-x: hidden; padding-bottom: 40px; }
+  .scroll-x-container { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 130px); }
+  .scroll-x-container::-webkit-scrollbar { height: 10px; }
+  .scroll-x-container::-webkit-scrollbar-track { background: #e5e7eb; }
+  .scroll-x-container::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 5px; }
+  .scroll-x-container::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+  .scroll-bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 16px;
+    overflow-x: auto; overflow-y: hidden; z-index: 900;
+    background: #f0f2f5; border-top: 1px solid #d1d5db;
+  }
+  .scroll-bottom-bar::-webkit-scrollbar { height: 10px; }
+  .scroll-bottom-bar::-webkit-scrollbar-track { background: #e5e7eb; }
+  .scroll-bottom-bar::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 5px; }
+  .scroll-bottom-bar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+  .scroll-bottom-spacer { height: 1px; }
+  table { border-collapse: collapse; min-width: 100%; background: #fff; }
+  thead { position: sticky; top: 0; z-index: 50; }
+  /* garante que o scroll-x-container não esconde o thead atrás do header+toolbar */
+  .scroll-x-container { padding-top: 0; }
+
+  thead tr th {
+    background: #1f2d40; color: #fff;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+    padding: 9px 7px; border-right: 1px solid rgba(255,255,255,0.12);
+    white-space: nowrap; text-align: center; vertical-align: middle;
+  }
+  thead tr th.th-fix {
+    position: sticky; left: 0; z-index: 10;
+  }
+  th.g-fin    { background: #243040; min-width: 80px; }
+  th.g-emp    { background: #1f2d40; min-width: 220px; text-align: left; padding-left: 10px; }
+  th.g-contrato { background: #1a3560; }
+  th.g-docs   { background: #0f4a2e; }
+  th.g-vistoria { background: #3a1555; }
+  /* CHECKLIST e NR1 em azul */
+  th.g-nr1    { background: #1a3a8f; }
+  th.g-entrega{ background: #0e3868; }
+
+  tbody tr { border-bottom: 1px solid var(--cinza-borda); }
+  tbody tr:hover { background: #f8faff; }
+  tbody tr.is-fin { opacity: 0.6; background: #f0faf5 !important; }
+  tbody tr.is-fin:hover { opacity: 0.78; }
+
+  td { padding: 0; vertical-align: middle; border-right: 1px solid var(--cinza-borda); }
+
+  td.td-emp {
+    position: sticky; left: 0; background: #fff; z-index: 5;
+    min-width: 220px; max-width: 280px; padding: 5px 8px 5px 10px;
+    border-right: 2px solid var(--cinza-borda);
+  }
+  tbody tr.is-fin td.td-emp { background: #f0faf5; }
+  tbody tr:hover td.td-emp { background: #f8faff; }
+
+  td.td-fin { text-align: center; width: 80px; padding: 6px; }
+  td.td-fin input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--verde); cursor: pointer; }
+
+  td.td-sel { text-align: center; min-width: 100px; padding: 2px 3px; }
+  td.td-sel select {
+    border: none; background: transparent; font-size: 12px; width: 100%;
+    text-align: center; cursor: pointer; padding: 5px 2px; border-radius: 4px; outline: none;
+  }
+  td.td-sel select:hover { background: var(--cinza-light); }
+  td.td-sel select:focus { background: #e0f2fe; box-shadow: inset 0 0 0 2px var(--verde-mid); }
+
+  td.td-txt { min-width: 120px; padding: 2px 4px; }
+  td.td-txt input {
+    border: none; background: transparent; font-size: 12px; width: 100%;
+    padding: 5px 5px; border-radius: 4px; outline: none; color: var(--texto);
+  }
+  td.td-txt input:hover { background: var(--cinza-light); }
+  td.td-txt input:focus { background: #e0f2fe; box-shadow: inset 0 0 0 2px var(--verde-mid); }
+
+  td.td-date { min-width: 130px; padding: 2px 3px; text-align: center; }
+  td.td-date input[type=date] {
+    border: none; background: transparent; font-size: 12px; width: 100%;
+    padding: 5px 2px; border-radius: 4px; outline: none; cursor: pointer;
+  }
+  td.td-date input:hover { background: var(--cinza-light); }
+  td.td-date input:focus { background: #e0f2fe; box-shadow: inset 0 0 0 2px var(--verde-mid); }
+
+  td.td-evt { min-width: 170px; padding: 2px 4px; }
+  td.td-evt input {
+    border: none; background: transparent; font-size: 12px; width: 100%;
+    padding: 5px 5px; border-radius: 4px; outline: none;
+  }
+  td.td-evt input:hover { background: var(--cinza-light); }
+  td.td-evt input:focus { background: #e0f2fe; box-shadow: inset 0 0 0 2px var(--verde-mid); }
+
+  .emp-nome input {
+    font-weight: 600; font-size: 13px; width: 100%;
+    border: none; background: transparent; outline: none; padding: 2px 0; color: var(--texto);
+  }
+  .emp-nome input:focus { background: #e0f2fe; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--verde-mid); }
+  .emp-fan input {
+    font-size: 11px; width: 100%; border: none; background: transparent;
+    outline: none; color: var(--texto-muted); padding: 1px 0;
+  }
+  .emp-fan input:focus { background: #e0f2fe; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--verde-mid); }
+
+  .empty-row td { text-align: center; padding: 60px 20px; color: var(--texto-muted); font-size: 15px; border: none; }
+  .add-row {
+    display: flex; align-items: center; gap: 8px; padding: 12px 18px;
+    color: var(--verde); font-weight: 600; font-size: 13px; cursor: pointer;
+    border-top: 1px dashed var(--cinza-borda); background: var(--verde-light);
+  }
+  .add-row:hover { background: #c6ead9; }
+
+  /* MODAL CONFIG */
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 4000; display: none; align-items: center; justify-content: center; }
+  .modal-back.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; padding: 28px 30px; width: min(560px,95vw); max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 50px rgba(0,0,0,0.25); }
+  .modal h2 { font-size: 18px; margin-bottom: 6px; }
+  .modal .sub { font-size: 13px; color: var(--texto-muted); margin-bottom: 20px; line-height: 1.5; }
+  .steps { counter-reset: step; display: flex; flex-direction: column; gap: 18px; margin-bottom: 24px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--verde); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+  .step-body { flex: 1; }
+  .step-body b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .step-body p { font-size: 12px; color: var(--texto-muted); line-height: 1.5; }
+  .step-body code { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; padding: 2px 6px; font-size: 12px; display: block; margin-top: 6px; word-break: break-all; max-height: 120px; overflow-y: auto; cursor: pointer; }
+  .inp-url { width: 100%; border: 1px solid var(--cinza-borda); border-radius: 8px; padding: 9px 12px; font-size: 13px; outline: none; margin-top: 8px; }
+  .inp-url:focus { border-color: var(--verde-mid); }
+  .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; border-top: 1px solid var(--cinza-borda); padding-top: 16px; }
+  .btn-cancel2 { background: var(--cinza-light); border: none; border-radius: 8px; padding: 8px 18px; font-size: 13px; cursor: pointer; }
+  .btn-salvar { background: var(--verde); color: #fff; border: none; border-radius: 8px; padding: 8px 22px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-salvar:hover { background: #0F6E56; }
+
+  #toast { position: fixed; bottom: 24px; right: 24px; background: #1f2d40; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; display: none; z-index: 5000; box-shadow: 0 4px 20px rgba(0,0,0,0.22); }
+
+  td.td-del { text-align: center; width: 44px; padding: 4px; }
+  .btn-del { background: none; border: none; cursor: pointer; color: #d1d5db; padding: 4px 6px; border-radius: 5px; font-size: 16px; line-height: 1; transition: color 0.15s, background 0.15s; }
+  .btn-del:hover { color: #dc2626; background: #fee2e2; }
+  th.g-del { background: #1f2d40; width: 44px; }
+
+  .conf-back { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 6000; display: none; align-items: center; justify-content: center; }
+  .conf-back.open { display: flex; }
+  .conf-box { background: #fff; border-radius: 14px; padding: 28px 32px; max-width: 360px; width: 90%; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.22); }
+  .conf-box h3 { font-size: 17px; margin-bottom: 8px; }
+  .conf-box p { font-size: 13px; color: var(--texto-muted); margin-bottom: 22px; line-height: 1.5; }
+  .conf-btns { display: flex; gap: 10px; justify-content: center; }
+  .conf-btns button { border-radius: 8px; padding: 9px 24px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+  .conf-cancel { background: var(--cinza-light); color: var(--texto); }
+  .conf-cancel:hover { background: #e5e7eb; }
+  .conf-ok { background: #dc2626; color: #fff; }
+  .conf-ok:hover { background: #b91c1c; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #f0f2f5; }
+  ::-webkit-scrollbar-thumb { background: #c4c8d0; border-radius: 4px; }
+
+  /* ── ALERTA SIRENE NOVA EMPRESA ─────────────────────────────── */
+  @keyframes sirene-bg {
+    0%,100% { background: #ff2d2d; }
+    50%      { background: #ff8c00; }
+  }
+  @keyframes sirene-scale {
+    0%,100% { transform: scale(1); }
+    50%      { transform: scale(1.04); }
+  }
+  @keyframes sirene-glow {
+    0%,100% { box-shadow: 0 0 30px 8px rgba(255,45,45,0.7), 0 8px 40px rgba(0,0,0,0.4); }
+    50%      { box-shadow: 0 0 50px 16px rgba(255,140,0,0.8), 0 8px 40px rgba(0,0,0,0.4); }
+  }
+  @keyframes sirene-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes fade-in-down {
+    from { opacity:0; transform: translateY(-40px) scale(0.92); }
+    to   { opacity:1; transform: translateY(0) scale(1); }
+  }
+  @keyframes badge-pulse {
+    0%,100% { transform: scale(1); opacity:1; }
+    50%      { transform: scale(1.15); opacity:0.85; }
+  }
+  .sirene-overlay {
+    position: fixed; inset: 0; z-index: 9000;
+    background: rgba(0,0,0,0.65);
+    display: none; align-items: center; justify-content: center;
+    backdrop-filter: blur(3px);
+  }
+  .sirene-overlay.open { display: flex; }
+  .sirene-box {
+    background: #ff2d2d; border-radius: 20px;
+    padding: 36px 40px; max-width: 480px; width: 92%;
+    text-align: center; color: #fff;
+    animation: sirene-scale 0.6s ease-in-out infinite, sirene-glow 0.6s ease-in-out infinite, fade-in-down 0.35s ease-out;
+  }
+  .sirene-icon {
+    font-size: 56px; line-height: 1; margin-bottom: 6px;
+    display: inline-block;
+    animation: sirene-spin 1.2s linear infinite;
+  }
+  .sirene-titulo {
+    font-size: 26px; font-weight: 900; letter-spacing: -0.5px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    margin-bottom: 4px;
+  }
+  .sirene-sub {
+    font-size: 13px; opacity: 0.88; margin-bottom: 18px;
+  }
+  .sirene-empresa {
+    background: rgba(255,255,255,0.18); border-radius: 12px;
+    padding: 14px 18px; margin-bottom: 20px; text-align: left;
+  }
+  .sirene-empresa b { font-size: 17px; display: block; margin-bottom: 2px; }
+  .sirene-empresa span { font-size: 12px; opacity: 0.85; }
+  .sirene-badge {
+    display: inline-block; background: #fff; color: #ff2d2d;
+    font-weight: 900; font-size: 13px; border-radius: 20px;
+    padding: 5px 16px; margin-bottom: 18px;
+    animation: badge-pulse 0.6s ease-in-out infinite;
+  }
+  .sirene-btns { display: flex; gap: 10px; justify-content: center; }
+  .sirene-btn-ok {
+    background: #fff; color: #ff2d2d; border: none;
+    border-radius: 10px; padding: 11px 28px; font-size: 14px;
+    font-weight: 800; cursor: pointer; flex: 1;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .sirene-btn-ok:hover { background: #ffe0e0; }
+  .sirene-btn-ver {
+    background: rgba(255,255,255,0.2); color: #fff;
+    border: 2px solid rgba(255,255,255,0.6);
+    border-radius: 10px; padding: 11px 20px; font-size: 14px;
+    font-weight: 700; cursor: pointer; flex: 1;
+  }
+  .sirene-btn-ver:hover { background: rgba(255,255,255,0.32); }
+
+  /* mini badge na linha da tabela */
+  .badge-novo {
+    display: inline-block; background: #ff2d2d; color: #fff;
+    font-size: 9px; font-weight: 800; border-radius: 8px;
+    padding: 1px 5px; margin-left: 5px; vertical-align: middle;
+    animation: badge-pulse 1s ease-in-out infinite;
+    letter-spacing: 0.03em;
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+    Cronograma de Atendimento
+  </div>
+  <div class="header-right">
+    <div class="header-stats">
+      <div class="hstat"><div class="val" id="s-total">0</div><div class="lbl">Total</div></div>
+      <div class="hstat"><div class="val" id="s-and" style="color:#facc15">0</div><div class="lbl">Andamento</div></div>
+      <div class="hstat"><div class="val" id="s-fin" style="color:#6ee7b7">0</div><div class="lbl">Finalizados</div></div>
+      <div class="hstat"><div class="val" id="s-pct">0%</div><div class="lbl">Concluído</div></div>
+      <div class="hstat"><div class="val" id="s-atrasadas" style="color:#f87171">0</div><div class="lbl">Atrasadas</div></div>
+    </div>
+    <div id="sync-status"><div id="sync-dot"></div><span id="sync-txt">Pronto</span></div>
+    <input type="file" id="file-input" accept=".xlsx,.xls" onchange="importarPlanilha(this)">
+    <button class="btn-import" onclick="document.getElementById('file-input').click()">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar Planilha
+    </button>
+    <button class="btn-new" onclick="addRow()">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      Nova empresa
+    </button>
+  </div>
+</header>
+
+<div id="config-banner">
+  ⚠️ <b>Banco de dados não configurado.</b> Dados salvos só neste navegador.
+  <a onclick="openCfg()">Configurar Google Sheets</a> para salvar na nuvem.
+  <span class="dismiss" onclick="hideBanner()">×</span>
+</div>
+
+<div class="toolbar" id="toolbar">
+  <input type="text" id="busca" placeholder="Buscar empresa..." oninput="renderTable()">
+  <select id="filtro" onchange="renderTable()">
+    <option value="todos">Todos</option>
+    <option value="andamento">Em andamento</option>
+    <option value="finalizado">Finalizados</option>
+    <option value="atrasadas">⚠️ Atrasadas (+20 dias)</option>
+  </select>
+  <button class="btn-relatorio" onclick="openRelatorio()">
+    📊 Relatório por pendência
+  </button>
+  <button class="btn-cfg" onclick="openAlertas()" style="color:#dc2626;border-color:#dc2626">
+    🔔 Ver alertas de prazo
+  </button>
+  <button class="btn-cfg" onclick="openCfg()">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Configurar banco
+  </button>
+  <div class="toolbar-info" id="tbar-info"></div>
+</div>
+
+<div class="table-wrap" id="table-wrap"><div class="scroll-x-container" id="scroll-x">
+<table>
+<thead>
+<tr>
+  <th class="g-fin th-fix">FINALIZADO</th>
+  <th class="g-emp th-fix" style="left:80px">RESP COMERCIAL</th>
+  <th class="g-contrato">RESP DOC</th>
+  <th class="g-contrato">DATA CONTRATO</th>
+  <th class="g-contrato">PGTO DO SINAL</th>
+  <th class="g-contrato">TIPO CONTRATO</th>
+  <th class="g-emp" style="min-width:220px">EMPRESA</th>
+  <th class="g-emp">NOME FANTASIA</th>
+  <th class="g-vistoria">DATA VISTORIA</th>
+  <th class="g-vistoria">BAIRRO</th>
+  <th class="g-vistoria">NOME RESPONSÁVEL DA VISTORIA</th>
+  <th class="g-vistoria">CONTATO DO RESPONS DA VISTORIA</th>
+  <th class="g-docs">PLANILHA RECEBIDA</th>
+  <th class="g-docs">PROCURAÇÃO LIBERADA</th>
+  <th class="g-docs">CADASTRO PLANILHA NO SOC</th>
+  <th class="g-nr1">CHECKLIST</th>
+  <th class="g-nr1">NR 1 - PSICO</th>
+  <th class="g-nr1">NR 1 - RELATÓRIO FINALIZADO</th>
+  <th class="g-nr1">CADASTRO GHE E RISCOS</th>
+  <th class="g-entrega">EMISSÃO PDF</th>
+  <th class="g-entrega">PGTO 2 PARCELA</th>
+  <th class="g-entrega">ENVIO PDF</th>
+  <th class="g-entrega">DATA REUNIÃO DE ENTREGA PDF</th>
+  <th class="g-entrega">ENVIO EVENTOS</th>
+  <th class="g-del"></th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+<div class="add-row" onclick="addRow()">
+  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+  Adicionar nova empresa
+</div>
+</div>
+
+<!-- MODAL CONFIG -->
+<div class="modal-back" id="modal-cfg">
+<div class="modal">
+  <h2>⚙️ Configurar Google Sheets como banco</h2>
+  <p class="sub">Configure uma vez. Os dados ficam salvos na sua planilha Google e aparecem em qualquer computador.</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <b>Crie uma planilha no Google Sheets</b>
+        <p>Acesse <a href="https://sheets.google.com" target="_blank" style="color:#1e40af">sheets.google.com</a>, crie uma planilha nova (ex: "Cronograma Atendimento").</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <b>Abra o Apps Script: Extensões → Apps Script</b>
+        <p>Apague o código que aparecer e cole o código abaixo:</p>
+        <code id="script-code" onclick="copyScript()" title="Clique para copiar">Clique para ver o código</code>
+        <p style="margin-top:5px"><a onclick="copyScript()" style="color:#1e40af;cursor:pointer;font-weight:600">📋 Clique para copiar o código</a></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <b>Publique: Implantar → Nova implantação</b>
+        <p>Tipo: <b>App da Web</b> · Executar como: <b>Eu</b> · Quem tem acesso: <b>Qualquer pessoa</b> · Clique Implantar e autorize.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <b>Cole a URL gerada aqui</b>
+        <input class="inp-url" id="inp-url" type="text" placeholder="https://script.google.com/macros/s/XXXXXXX/exec">
+      </div>
+    </div>
+  </div>
+  <div class="modal-btns">
+    <button class="btn-cancel2" onclick="closeCfg()">Cancelar</button>
+    <button class="btn-salvar" onclick="saveUrl()">Salvar e conectar</button>
+  </div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- BARRA SCROLL FIXO EM BAIXO -->
+<div class="scroll-bottom-bar" id="scroll-bottom">
+  <div class="scroll-bottom-spacer" id="scroll-spacer"></div>
+</div>
+
+<div id="toast"></div>
+
+<!-- MODAL CONFIRMAÇÃO DELETE -->
+<div class="conf-back" id="conf-modal">
+  <div class="conf-box">
+    <h3>🗑️ Remover empresa?</h3>
+    <p id="conf-msg">Esta ação não pode ser desfeita.</p>
+    <div class="conf-btns">
+      <button class="conf-cancel" onclick="closeConf()">Cancelar</button>
+      <button class="conf-ok" onclick="confirmDelete()">Sim, remover</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ALERTAS DE PRAZO -->
+<div class="alert-prazo" id="modal-alertas">
+  <div class="alert-box">
+    <h3>🚨 Alertas de Prazo</h3>
+    <p class="sub">Empresas com contrato assinado há mais de 20 dias sem entrega finalizada</p>
+    <div id="alertas-lista"></div>
+    <div class="alert-close"><button onclick="closeAlertas()">Fechar</button></div>
+  </div>
+</div>
+
+<!-- MODAL RELATÓRIO POR PENDÊNCIA -->
+<div class="rel-back" id="modal-relatorio">
+  <div class="rel-box">
+    <h3>📊 Relatório / PROCV</h3>
+    <p class="sub">Filtre por pendência ou digite qualquer valor para buscar em todas as colunas (como PROCV do Excel)</p>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <input type="text" id="procv-input" placeholder="🔍 PROCV — buscar por empresa, bairro, responsável, contato..."
+        oninput="aplicarProcv()"
+        style="flex:1;border:1.5px solid #1e40af;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;">
+      <select id="procv-col" onchange="aplicarProcv()"
+        style="border:1.5px solid #1e40af;border-radius:8px;padding:8px 10px;font-size:12px;background:#f0f4ff;outline:none;cursor:pointer">
+        <option value="todas">Todas as colunas</option>
+        <option value="empresa">Empresa</option>
+        <option value="fantasia">Nome Fantasia</option>
+        <option value="bairro">Bairro</option>
+        <option value="respComercial">Resp. Comercial</option>
+        <option value="respDoc">Resp. Doc</option>
+        <option value="respVistoria">Resp. Vistoria</option>
+        <option value="contatoVistoria">Contato</option>
+        <option value="tipoContrato">Tipo Contrato</option>
+        <option value="planilha">Planilha</option>
+        <option value="procuracao">Procuração</option>
+        <option value="soc">SOC</option>
+        <option value="checklist">Checklist</option>
+        <option value="nr1psico">NR1 Psico</option>
+        <option value="nr1rel">NR1 Relatório</option>
+        <option value="ghe">GHE</option>
+      </select>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Filtrar por serviço pendente:</div>
+    <div class="rel-filters" id="rel-filters"></div>
+    <div class="rel-count" id="rel-count" style="margin-top:10px"></div>
+    <div class="rel-results" id="rel-results"></div>
+    <div class="alert-close" style="margin-top:12px">
+      <button onclick="limparRelatorio()" style="margin-right:8px;background:#f3f4f6;border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer">Limpar</button>
+      <button onclick="closeRelatorio()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SIRENE NOVA EMPRESA -->
+<div class="sirene-overlay" id="sirene-modal">
+  <div class="sirene-box">
+    <div class="sirene-icon">🚨</div>
+    <div class="sirene-titulo">NOVA EMPRESA!</div>
+    <div class="sirene-sub">Cadastrada nos últimos 3 dias</div>
+    <div class="sirene-badge" id="sirene-badge">NOVO</div>
+    <div class="sirene-empresa">
+      <b id="sirene-nome">—</b>
+      <span id="sirene-info">—</span>
+    </div>
+    <div class="sirene-btns">
+      <button class="sirene-btn-ok" onclick="fecharSirene()">✓ Entendido</button>
+      <button class="sirene-btn-ver" onclick="fecharSirene()">Ver na tabela</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const APPS_SCRIPT = `const SHEET_NAME = 'Dados';
+
+function doGet(e) {
+  if (e.parameter.action === 'load') return load();
+  return resp({ok:false});
+}
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    if (body.action === 'save') return save(body.records);
+  } catch(err) {}
+  return resp({ok:false});
+}
+function resp(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function getSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_NAME);
+    sh.appendRow(['id','finalizado','respComercial','respDoc','dataContrato','pgtoSinal',
+      'tipoContrato','empresa','fantasia','dataVistoria','bairro','respVistoria','contatoVistoria',
+      'planilha','procuracao','soc','checklist','nr1psico',
+      'nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao','eventos']);
+  }
+  return sh;
+}
+function fmtDate(v) {
+  if (!v || v === '') return '';
+  if (v instanceof Date) {
+    var y = v.getFullYear(), m = v.getMonth()+1, d = v.getDate();
+    if (y < 1900) return '';
+    return y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
+  }
+  var s = String(v).trim();
+  if (!s || s === '0') return '';
+  // already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  // DD/MM/YYYY
+  var m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m2) return m2[3]+'-'+(m2[2].length<2?'0':'')+m2[2]+'-'+(m2[1].length<2?'0':'')+m2[1];
+  return s;
+}
+var DATE_COLS = ['dataContrato','dataVistoria','planilha','procuracao','soc',
+  'checklist','nr1psico','nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao'];
+function load() {
+  const sh = getSheet();
+  const data = sh.getDataRange().getValues();
+  const headers = data[0];
+  const records = data.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h,i) => {
+      var v = row[i];
+      if (v === true || v === false) { obj[h] = v; return; }
+      if (DATE_COLS.indexOf(h) >= 0) { obj[h] = fmtDate(v); return; }
+      obj[h] = String(v || '');
+    });
+    obj.finalizado = obj.finalizado === true || obj.finalizado === 'true';
+    return obj;
+  });
+  return resp({ok:true, records});
+}
+function save(records) {
+  const sh = getSheet();
+  const headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+  const rows = records.map(r => headers.map(h => r[h] !== undefined ? r[h] : ''));
+  if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow()-1);
+  if (rows.length) sh.getRange(2,1,rows.length,headers.length).setValues(rows);
+  return resp({ok:true});
+}`;
+
+let records = [];
+let SCRIPT_URL = localStorage.getItem('cronograma_url') || '';
+let bannerHidden = localStorage.getItem('banner_hidden') === '1';
+let saveTimer = null;
+
+const OPTS_STATUS  = ['','OK','NAO INFORMADO','NÃO TEM','XML','ENCERRADO','ANUAL'];
+const OPTS_PGTO    = ['','OK','NAO INFORMADO','ANUAL','PENDENTE'];
+const OPTS_TIPO    = ['','NAO INFORMADO','Mensal','Anual','Semestral','Avulso','Atualização','AEP','AEP E AET','Outro'];
+
+// Configuração das pendências para relatório
+const PENDENCIAS = [
+  { id: 'sem-vistoria',   label: '📅 Sem data de vistoria',      check: r => !r.dataVistoria },
+  { id: 'sem-planilha',   label: '📋 Sem planilha recebida',      check: r => !r.planilha || r.planilha === '' },
+  { id: 'sem-procuracao', label: '📄 Sem procuração',             check: r => !r.procuracao || r.procuracao === '' },
+  { id: 'sem-soc',        label: '💻 Sem cadastro SOC',           check: r => !r.soc || r.soc === '' },
+  { id: 'sem-checklist',  label: '✅ Sem checklist',              check: r => !r.checklist || r.checklist === '' },
+  { id: 'sem-nr1psico',   label: '🧠 Sem NR1 Psico',             check: r => !r.nr1psico || r.nr1psico === '' },
+  { id: 'sem-nr1rel',     label: '📝 Sem NR1 Relatório',         check: r => !r.nr1rel || r.nr1rel === '' },
+  { id: 'sem-ghe',        label: '⚙️ Sem cadastro GHE',          check: r => !r.ghe || r.ghe === '' },
+  { id: 'sem-pdf',        label: '📑 Sem emissão PDF',            check: r => !r.emissaoPdf || r.emissaoPdf === '' },
+  { id: 'sem-envio',      label: '📨 Sem envio PDF',              check: r => !r.envioPdf || r.envioPdf === '' },
+  { id: 'sem-pgto2',      label: '💰 Sem 2ª parcela',            check: r => !r.pgto2 || r.pgto2 === '' },
+  { id: 'atrasadas',      label: '🚨 Atrasadas (+20 dias)',       check: r => calcDiasContrato(r) > 20 },
+];
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ─── CALCULA DIAS DESDE CONTRATO ─────────────────────────────────────────────
+function calcDiasContrato(r) {
+  if (!r.dataContrato || r.finalizado) return 0;
+  const dc = new Date(r.dataContrato);
+  if (isNaN(dc)) return 0;
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const diff = Math.floor((hoje - dc) / (1000*60*60*24));
+  return diff;
+}
+
+// ─── SYNC ─────────────────────────────────────────────────────────────────────
+function setSync(state, msg) {
+  document.getElementById('sync-dot').className = state;
+  document.getElementById('sync-txt').textContent = msg;
+}
+
+// Converte QUALQUER formato de data para YYYY-MM-DD
+function parseDate(val) {
+  if (!val && val !== 0) return '';
+  // Objeto Date real
+  if (val instanceof Date && !isNaN(val)) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth()+1).padStart(2,'0');
+    const d = String(val.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d;
+  }
+  const s = val.toString().trim();
+  if (!s || s === '0' || s.toLowerCase() === 'invalid date') return '';
+  // Já está em YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // YYYY-MM-DD com hora (ISO)
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2} /.test(s)) {
+    return s.slice(0,10);
+  }
+  // DD/MM/YYYY ou D/M/YYYY
+  let match = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (match) return match[3]+'-'+match[2].padStart(2,'0')+'-'+match[1].padStart(2,'0');
+  // MM/DD/YYYY americano (ex: 05/10/2024)
+  match = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match && parseInt(match[1]) <= 12) {
+    // tenta detectar: se dia > 12, é DD/MM
+    if (parseInt(match[2]) > 12)
+      return match[3]+'-'+match[1].padStart(2,'0')+'-'+match[2].padStart(2,'0');
+  }
+  // Fri Jan 10 2025 ... ou Mon May 10 2024 00:00:00 GMT...
+  // "Sat, 10 May 2025 00:00:00 GMT" ou "Fri May 10 2024 00:00:00 GMT-0300"
+  const monthMap = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  match = s.match(/(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
+  if (!match) match = s.match(/([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+  if (match) {
+    // try "DD Mon YYYY" first
+    let day, mon, year;
+    if (/^\d/.test(match[1])) { day=match[1]; mon=match[2]; year=match[3]; }
+    else { mon=match[1]; day=match[2]; year=match[3]; }
+    const mNum = monthMap[mon.toLowerCase().slice(0,3)];
+    if (mNum) return year+'-'+String(mNum).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+  }
+  // Tenta new Date() como último recurso
+  const dt = new Date(s);
+  if (!isNaN(dt.getTime())) {
+    // usa UTC para evitar offset de timezone
+    return dt.getUTCFullYear()+'-'+String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0');
+  }
+  // Excel serial numérico
+  const n = parseFloat(s);
+  if (!isNaN(n) && n > 40000 && n < 60000) {
+    const dtx = new Date(Math.round((n-25569)*86400*1000));
+    return dtx.getUTCFullYear()+'-'+String(dtx.getUTCMonth()+1).padStart(2,'0')+'-'+String(dtx.getUTCDate()).padStart(2,'0');
+  }
+  return '';
+}
+
+// Campos que devem ser tratados como data
+const DATE_FIELDS = ['dataContrato','dataVistoria','planilha','procuracao','soc',
+  'checklist','nr1psico','nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao'];
+
+function normalizarDatasRecord(r) {
+  DATE_FIELDS.forEach(f => { if (r[f] !== undefined) r[f] = parseDate(r[f]); });
+  return r;
+}
+
+async function loadFromSheets() {
+  if (!SCRIPT_URL) { loadLocal(); return; }
+  setSync('syncing','Carregando...');
+  try {
+    const r = await fetch(SCRIPT_URL + '?action=load');
+    const data = await r.json();
+    if (data.ok) {
+      records = data.records.map(normalizarDatasRecord);
+      saveLocal();
+      setSync('','Sincronizado ✓');
+      renderTable();
+    } else throw new Error();
+  } catch(e) { setSync('error','Erro — usando backup local'); loadLocal(); }
+}
+
+async function saveToSheets() {
+  saveLocal();
+  if (!SCRIPT_URL) return;
+  setSync('syncing','Salvando...');
+  try {
+    const r = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify({action:'save', records}) });
+    const data = await r.json();
+    if (data.ok) setSync('','Salvo ✓');
+    else throw new Error();
+  } catch(e) { setSync('error','Erro ao salvar — backup local OK'); }
+}
+
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveToSheets, 1200); }
+function saveLocal() { localStorage.setItem('cronograma_bk', JSON.stringify(records)); }
+function loadLocal() {
+  try {
+    const d = localStorage.getItem('cronograma_bk');
+    if (d) {
+      const saved = JSON.parse(d);
+      if (saved && saved.length >= records.length) records = saved.map(normalizarDatasRecord);
+    }
+  } catch(e) {}
+  setSync('', SCRIPT_URL ? 'Offline — dados locais' : 'Sem banco configurado');
+  renderTable();
+}
+
+// ─── CONFIG MODAL ─────────────────────────────────────────────────────────────
+function openCfg() {
+  document.getElementById('script-code').textContent = APPS_SCRIPT;
+  document.getElementById('inp-url').value = SCRIPT_URL;
+  document.getElementById('modal-cfg').classList.add('open');
+}
+function closeCfg() { document.getElementById('modal-cfg').classList.remove('open'); }
+
+function copyScript() {
+  navigator.clipboard.writeText(APPS_SCRIPT)
+    .then(() => toast('Código copiado!'))
+    .catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = APPS_SCRIPT; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta); toast('Código copiado!');
+    });
+}
+
+async function saveUrl() {
+  const url = document.getElementById('inp-url').value.trim();
+  if (!url || !url.startsWith('https://script.google.com')) {
+    alert('URL inválida. Deve começar com https://script.google.com'); return;
+  }
+  SCRIPT_URL = url;
+  localStorage.setItem('cronograma_url', url);
+  hideBanner(); closeCfg();
+  toast('Enviando dados para o Google Sheets...');
+  setSync('syncing', 'Enviando dados...');
+  try {
+    const r = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'save', records })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      setSync('', 'Sincronizado ✓');
+      toast('✅ ' + records.length + ' empresas enviadas para o Google Sheets!');
+    } else { throw new Error(); }
+  } catch(e) {
+    setSync('error', 'Erro ao enviar');
+    toast('Erro ao conectar. Verifique a URL.');
+  }
+}
+
+function hideBanner() {
+  bannerHidden = true;
+  localStorage.setItem('banner_hidden','1');
+  document.getElementById('config-banner').style.display = 'none';
+  document.getElementById('toolbar').style.top = 'var(--header-h)';
+  // toolbar ~46px
+  document.getElementById('table-wrap').style.marginTop = 'calc(var(--header-h) + 46px)';
+  document.getElementById('scroll-x').style.maxHeight = 'calc(100vh - var(--header-h) - 46px)';
+}
+
+// ─── ALERTAS DE PRAZO ─────────────────────────────────────────────────────────
+function openAlertas() {
+  const lista = document.getElementById('alertas-lista');
+  const atrasadas = records.filter(r => !r.finalizado && calcDiasContrato(r) > 20);
+  
+  if (atrasadas.length === 0) {
+    lista.innerHTML = '<div class="rel-empty">✅ Nenhuma empresa com prazo estourado!</div>';
+  } else {
+    atrasadas.sort((a,b) => calcDiasContrato(b) - calcDiasContrato(a));
+    lista.innerHTML = atrasadas.map(r => {
+      const dias = calcDiasContrato(r);
+      const cls = dias > 30 ? 'critico' : 'atencao';
+      const badge = dias > 30 ? `${dias} dias — CRÍTICO` : `${dias} dias — ATENÇÃO`;
+      return `<div class="alert-item ${cls}">
+        <div class="alert-item-info">
+          <b>${esc(r.empresa || 'Sem nome')}</b>
+          <span>${r.respComercial ? 'Resp: ' + esc(r.respComercial) + ' · ' : ''}Contrato: ${r.dataContrato || 'N/D'}</span>
+        </div>
+        <span class="alert-badge ${cls}">${badge}</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('modal-alertas').classList.add('open');
+}
+function closeAlertas() { document.getElementById('modal-alertas').classList.remove('open'); }
+
+// ─── RELATÓRIO POR PENDÊNCIA ──────────────────────────────────────────────────
+let relFiltroAtivo = null;
+
+function openRelatorio() {
+  relFiltroAtivo = null;
+  renderRelFiltros();
+  document.getElementById('rel-results').innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
+  document.getElementById('rel-count').textContent = '';
+  document.getElementById('procv-input').value = '';
+  document.getElementById('procv-col').value = 'todas';
+  document.getElementById('modal-relatorio').classList.add('open');
+}
+function closeRelatorio() { document.getElementById('modal-relatorio').classList.remove('open'); }
+
+function limparRelatorio() {
+  relFiltroAtivo = null;
+  document.getElementById('procv-input').value = '';
+  document.getElementById('procv-col').value = 'todas';
+  renderRelFiltros();
+  document.getElementById('rel-results').innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
+  document.getElementById('rel-count').textContent = '';
+}
+
+function renderRelFiltros() {
+  const wrap = document.getElementById('rel-filters');
+  wrap.innerHTML = PENDENCIAS.map(p => {
+    const count = records.filter(r => !r.finalizado && p.check(r)).length;
+    const active = relFiltroAtivo === p.id ? 'active' : '';
+    return `<button class="rel-btn ${active}" onclick="aplicarRelFiltro('${p.id}')">${p.label} <b>(${count})</b></button>`;
+  }).join('');
+}
+
+function renderRelTabela(resultados, titulo) {
+  document.getElementById('rel-count').textContent = `${resultados.length} empresa(s) encontrada(s) — ${titulo}`;
+  if (resultados.length === 0) {
+    document.getElementById('rel-results').innerHTML = '<div class="rel-empty">✅ Nenhuma empresa encontrada!</div>';
+    return;
+  }
+  document.getElementById('rel-results').innerHTML = `
+    <table>
+      <thead><tr><th>EMPRESA</th><th>FANTASIA</th><th>BAIRRO</th><th>RESP COMERCIAL</th><th>CONTATO VISTORIA</th><th>DATA CONTRATO</th><th>DIAS</th></tr></thead>
+      <tbody>${resultados.map(r => {
+        const dias = calcDiasContrato(r);
+        return `<tr>
+          <td><b>${esc(r.empresa || '—')}</b></td>
+          <td>${esc(r.fantasia||'—')}</td>
+          <td>${esc(r.bairro||'—')}</td>
+          <td>${esc(r.respComercial||'—')}</td>
+          <td>${esc(r.contatoVistoria||'—')}</td>
+          <td>${r.dataContrato||'—'}</td>
+          <td>${dias > 0 ? '<b style="color:'+(dias>20?'#dc2626':dias>10?'#f59e0b':'inherit')+'">'+dias+'d</b>' : '—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+function aplicarRelFiltro(id) {
+  relFiltroAtivo = id;
+  document.getElementById('procv-input').value = '';
+  renderRelFiltros();
+  const pend = PENDENCIAS.find(p => p.id === id);
+  if (!pend) return;
+  const resultados = records.filter(r => !r.finalizado && pend.check(r));
+  renderRelTabela(resultados, pend.label);
+}
+
+// PROCV — busca livre em todas as colunas ou coluna específica
+function aplicarProcv() {
+  const q = (document.getElementById('procv-input').value || '').toLowerCase().trim();
+  const col = document.getElementById('procv-col').value;
+  if (!q) {
+    relFiltroAtivo = null;
+    renderRelFiltros();
+    document.getElementById('rel-results').innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
+    document.getElementById('rel-count').textContent = '';
+    return;
+  }
+  relFiltroAtivo = null;
+  renderRelFiltros();
+  const CAMPOS = {
+    empresa: r => r.empresa, fantasia: r => r.fantasia, bairro: r => r.bairro,
+    respComercial: r => r.respComercial, respDoc: r => r.respDoc,
+    respVistoria: r => r.respVistoria, contatoVistoria: r => r.contatoVistoria,
+    tipoContrato: r => r.tipoContrato, planilha: r => r.planilha,
+    procuracao: r => r.procuracao, soc: r => r.soc, checklist: r => r.checklist,
+    nr1psico: r => r.nr1psico, nr1rel: r => r.nr1rel, ghe: r => r.ghe,
+    todas: r => Object.values(r).join(' ')
+  };
+  const fn = CAMPOS[col] || CAMPOS.todas;
+  const resultados = records.filter(r => (fn(r)||'').toLowerCase().includes(q));
+  renderRelTabela(resultados, `PROCV: "${q}"`);
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const tot = records.length;
+  const fin = records.filter(r => r.finalizado).length;
+  const atrasadas = records.filter(r => !r.finalizado && calcDiasContrato(r) > 20).length;
+  document.getElementById('s-total').textContent = tot;
+  document.getElementById('s-and').textContent = tot - fin;
+  document.getElementById('s-fin').textContent = fin;
+  document.getElementById('s-pct').textContent = tot ? Math.round(fin/tot*100)+'%' : '0%';
+  document.getElementById('s-atrasadas').textContent = atrasadas;
+  
+  // Alerta automático ao carregar
+  if (atrasadas > 0) {
+    const btn = document.querySelector('.btn-cfg[onclick="openAlertas()"]');
+    if (btn) btn.textContent = `🔔 ${atrasadas} empresa(s) atrasada(s)!`;
+  }
+}
+
+// ─── FIELD HELPERS ────────────────────────────────────────────────────────────
+function selHtml(idx, field, opts) {
+  const val = records[idx][field] || '';
+  // Se o valor salvo não está nas opções, adiciona dinamicamente
+  const allOpts = opts.includes(val) ? opts : [...opts, val].filter(Boolean);
+  let h = `<select onchange="setField(${idx},'${field}',this.value)">`;
+  if (!opts.includes('')) h += `<option value="">— —</option>`;
+  allOpts.forEach(o => {
+    if (o === '' && opts.includes('')) h += `<option value=""${val===''?' selected':''}>— —</option>`;
+    else if (o !== '') h += `<option value="${o}"${o===val?' selected':''}>${o}</option>`;
+  });
+  return h + '</select>';
+}
+function dateHtml(idx, field) {
+  const val = records[idx][field] || '';
+  return `<input type="date" value="${esc(val)}" onchange="setField(${idx},'${field}',this.value)">`;
+}
+// Campo misto: se valor é data YYYY-MM-DD → input date; se é texto → input text
+function mixedHtml(idx, field, ph) {
+  const val = records[idx][field] || '';
+  const isDate = /^\d{4}-\d{2}-\d{2}$/.test(val) || val === '';
+  if (isDate) {
+    return `<input type="date" value="${esc(val)}"
+      onchange="setField(${idx},'${field}',this.value)"
+      style="border:none;background:transparent;font-size:12px;width:100%;padding:5px 2px;border-radius:4px;outline:none;cursor:pointer;"
+      onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">`;
+  }
+  return `<input type="text" value="${esc(val)}" placeholder="${ph||''}"
+    onchange="setField(${idx},'${field}',this.value)"
+    onblur="setField(${idx},'${field}',this.value)"
+    style="border:none;background:transparent;font-size:12px;width:100%;padding:5px 5px;border-radius:4px;outline:none;color:#111827;"
+    onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">`;
+}
+function txtHtml(idx, field, ph) {
+  const val = records[idx][field] || '';
+  return `<input type="text" value="${esc(val)}" placeholder="${ph||''}" onchange="setField(${idx},'${field}',this.value)" onblur="setField(${idx},'${field}',this.value)">`;
+}
+function setField(idx, field, val) {
+  records[idx][field] = val;
+  updateStats();
+  scheduleSave();
+}
+
+// ─── ADD ROW ──────────────────────────────────────────────────────────────────
+function addRow() {
+  records.push({
+    id:uid(), finalizado:false,
+    createdAt: new Date().toISOString(),
+    respComercial:'', respDoc:'', dataContrato:'', pgtoSinal:'', tipoContrato:'',
+    empresa:'', fantasia:'', dataVistoria:'', bairro:'',
+    respVistoria:'', contatoVistoria:'',
+    planilha:'', procuracao:'', soc:'',
+    checklist:'', nr1psico:'', nr1rel:'', ghe:'',
+    emissaoPdf:'', pgto2:'', envioPdf:'', dataReuniao:'', eventos:''
+  });
+  renderTable();
+  scheduleSave();
+  setTimeout(() => {
+    const rows = document.querySelectorAll('#tbody tr');
+    if (rows.length) {
+      const last = rows[rows.length-1];
+      const inp = last.querySelector('input[type=text]');
+      if (inp) { inp.scrollIntoView({behavior:'smooth',block:'center'}); inp.focus(); }
+    }
+  }, 80);
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderTable() {
+  const q = (document.getElementById('busca').value || '').toLowerCase();
+  const f = document.getElementById('filtro').value;
+
+  const visible = records.filter(r => {
+    const mq = !q || (r.empresa||'').toLowerCase().includes(q) || (r.fantasia||'').toLowerCase().includes(q);
+    let mf = true;
+    if (f === 'finalizado') mf = r.finalizado;
+    else if (f === 'andamento') mf = !r.finalizado;
+    else if (f === 'atrasadas') mf = !r.finalizado && calcDiasContrato(r) > 20;
+    return mq && mf;
+  });
+
+  document.getElementById('tbar-info').textContent = `${visible.length} de ${records.length} empresa${records.length!==1?'s':''}`;
+  updateStats();
+
+  const tbody = document.getElementById('tbody');
+  if (visible.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="25">Nenhuma empresa. Clique em <b>Nova empresa</b> para começar.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = visible.map(r => {
+    const idx = records.indexOf(r);
+    const dias = calcDiasContrato(r);
+    let rowCls = r.finalizado ? 'is-fin' : '';
+    let prazoBadge = '';
+    if (!r.finalizado && dias > 30) {
+      rowCls += ' prazo-critico';
+      prazoBadge = `<span class="prazo-badge critico">⚠️ ${dias}d</span>`;
+    } else if (!r.finalizado && dias > 20) {
+      rowCls += ' prazo-atencao';
+      prazoBadge = `<span class="prazo-badge atencao">⏰ ${dias}d</span>`;
+    }
+
+    return `<tr class="${rowCls}">
+      <td class="td-fin">
+        <input type="checkbox" ${r.finalizado?'checked':''} title="Finalizado"
+          onchange="setField(${idx},'finalizado',this.checked);this.closest('tr').classList.toggle('is-fin',this.checked)">
+      </td>
+      <td class="td-txt">${txtHtml(idx,'respComercial','Resp. Comercial')}</td>
+      <td class="td-txt">${txtHtml(idx,'respDoc','Resp. Doc.')}</td>
+      <td class="td-date">${dateHtml(idx,'dataContrato')}${prazoBadge}</td>
+      <td class="td-txt">${mixedHtml(idx,'pgtoSinal','OK/Data/ANUAL')}</td>
+      <td class="td-sel">${selHtml(idx,'tipoContrato',OPTS_TIPO)}</td>
+      <td class="td-emp">
+        <div class="emp-nome" style="display:flex;align-items:center">
+          <input type="text" value="${esc(r.empresa)}" placeholder="Nome da empresa"
+            onchange="setField(${idx},'empresa',this.value)" onblur="setField(${idx},'empresa',this.value)">
+          ${isNova(r) ? '<span class="badge-novo">NOVO</span>' : ''}
+        </div>
+        <div class="emp-fan"><input type="text" value="${esc(r.fantasia)}" placeholder="Nome fantasia"
+          onchange="setField(${idx},'fantasia',this.value)" onblur="setField(${idx},'fantasia',this.value)"></div>
+      </td>
+      <td class="td-txt">${txtHtml(idx,'fantasia','Nome fantasia')}</td>
+      <td class="td-date">${dateHtml(idx,'dataVistoria')}</td>
+      <td class="td-txt">${txtHtml(idx,'bairro','Bairro')}</td>
+      <td class="td-txt">${txtHtml(idx,'respVistoria','Nome responsável')}</td>
+      <td class="td-txt">${txtHtml(idx,'contatoVistoria','Telefone / email')}</td>
+      <td class="td-date">${mixedHtml(idx,'planilha','Data ou OK/NAO TEM')}</td>
+      <td class="td-date">${mixedHtml(idx,'procuracao','Data ou OK/NAO TEM')}</td>
+      <td class="td-date">${mixedHtml(idx,'soc','Data ou OK/NAO TEM')}</td>
+      <td class="td-date">${mixedHtml(idx,'checklist','Data ou OK/NAO TEM')}</td>
+      <td class="td-date">${mixedHtml(idx,'nr1psico','Data ou FAZER/OK')}</td>
+      <td class="td-date">${mixedHtml(idx,'nr1rel','Data ou FAZER/OK')}</td>
+      <td class="td-date">${mixedHtml(idx,'ghe','Data ou OK/FAZER')}</td>
+      <td class="td-date">${mixedHtml(idx,'emissaoPdf','Data ou OK/FAZER')}</td>
+      <td class="td-date">${mixedHtml(idx,'pgto2','Data ou OK/ANUAL')}</td>
+      <td class="td-date">${mixedHtml(idx,'envioPdf','Data ou OK/FAZER')}</td>
+      <td class="td-date">${dateHtml(idx,'dataReuniao')}</td>
+      <td class="td-evt">${txtHtml(idx,'eventos','Ex: ENVIO COND 10/01/2025')}</td>
+      <td class="td-del"><button class="btn-del" onclick="askDelete(${idx})" title="Remover empresa">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._t); t._t = setTimeout(() => t.style.display='none', 2200);
+}
+
+// ─── DELETE ───────────────────────────────────────────────────────────────────
+let deleteIdx = null;
+function askDelete(idx) {
+  deleteIdx = idx;
+  const nome = records[idx].empresa || 'empresa sem nome';
+  document.getElementById('conf-msg').textContent = `Remover "${nome}"? Esta ação não pode ser desfeita.`;
+  document.getElementById('conf-modal').classList.add('open');
+}
+function closeConf() { document.getElementById('conf-modal').classList.remove('open'); deleteIdx = null; }
+function confirmDelete() {
+  if (deleteIdx === null) return;
+  records.splice(deleteIdx, 1);
+  closeConf();
+  scheduleSave();
+  renderTable();
+  toast('Empresa removida.');
+}
+
+// ─── IMPORTAR PLANILHA ───────────────────────────────────────────────────────
+function importarPlanilha(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array', cellDates:true, raw:true});
+
+      const sheetName = wb.SheetNames.find(n =>
+        n.toUpperCase().includes('CRONOGRAMA') || n.toUpperCase().includes('ATENDIMENTO')
+      ) || wb.SheetNames[0];
+
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+      if (rows.length < 2) { alert('Planilha sem dados!'); return; }
+
+      const header = rows[0].map(h => (h||'').toString().toUpperCase().trim());
+
+      function colIdx(names) {
+        for (const n of names) {
+          const i = header.findIndex(h => h.includes(n));
+          if (i >= 0) return i;
+        }
+        return -1;
+      }
+      function getRaw(row, names) {
+        const i = colIdx(names);
+        if (i < 0 || row[i] === null || row[i] === undefined) return null;
+        return row[i];
+      }
+
+      // Converte para YYYY-MM-DD se for data, senão retorna ''
+      function toDate(v) {
+        if (v === null || v === undefined || v === '') return '';
+        if (v instanceof Date && !isNaN(v)) {
+          const y = v.getFullYear(), m = v.getMonth()+1, d = v.getDate();
+          if (y < 1900) return '';
+          return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        }
+        const s = v.toString().trim();
+        if (!s || s === '0') return '';
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+        let m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (m2) return m2[3]+'-'+m2[2].padStart(2,'0')+'-'+m2[1].padStart(2,'0');
+        const n = parseFloat(s);
+        if (!isNaN(n) && n > 40000 && n < 60000) {
+          const dt = new Date(Math.round((n-25569)*86400*1000));
+          return dt.getUTCFullYear()+'-'+String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0');
+        }
+        return '';
+      }
+
+      // Para colunas MISTAS: se for date → YYYY-MM-DD; se for texto → texto
+      function colMixed(row, names) {
+        const v = getRaw(row, names);
+        if (v === null) return '';
+        if (v instanceof Date) return toDate(v);
+        const s = v.toString().trim();
+        // Tenta converter como data serial ou ISO
+        const asDate = toDate(v);
+        if (asDate) return asDate;
+        // É texto mesmo (OK, NAO TEM, FAZER, etc.)
+        return s;
+      }
+
+      // Para colunas só DATA
+      function colDate(row, names) {
+        const v = getRaw(row, names);
+        return toDate(v);
+      }
+
+      // Para colunas só TEXTO
+      function colStr(row, names) {
+        const v = getRaw(row, names);
+        if (v === null || v === undefined) return '';
+        if (v instanceof Date) return toDate(v);
+        // Normaliza tipo contrato
+        return v.toString().trim();
+      }
+
+      // Normaliza tipo contrato para o dropdown
+      function normTipo(s) {
+        const map = {
+          'ANUAL':'Anual','ANUAL ':'Anual','MENSAL':'Mensal','SEMESTRAL':'Semestral',
+          'AVULSO':'Avulso','ATUALIZAÇÃO':'Atualização','ATUALIZACAO':'Atualização',
+          'AEP':'AEP','AEP E AET':'AEP E AET','OUTRO':'Outro','NAO INFORMADO':'NAO INFORMADO',
+          'NÃO INFORMADO':'NAO INFORMADO'
+        };
+        return map[s.toUpperCase().trim()] || s;
+      }
+
+      const imported = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length < 3) continue;
+        const empI = colIdx(['EMPRESA']);
+        const empresa = empI >= 0 && row[empI] ? row[empI].toString().trim() : '';
+        if (!empresa || empresa.toUpperCase() === 'EMPRESA') continue;
+
+        const finV = getRaw(row, ['FINALIZADO']);
+        const finStr = finV !== null ? finV.toString().toUpperCase() : '';
+        const finalizado = finV === true || finStr === 'TRUE' || finStr === '1' || finStr === 'SIM' || finStr === 'X';
+
+        imported.push({
+          id: 'imp' + Date.now() + i,
+          finalizado,
+          createdAt: null,
+          // Texto puro
+          respComercial:   colStr(row, ['RESP COMERCIAL','RESPONSÁVEL COMERCIAL','RESP. COMERCIAL']),
+          respDoc:         colStr(row, ['RESP DOC','RESPONSÁVEL DOC','RESP. DOC']),
+          tipoContrato:    normTipo(colStr(row, ['TIPO CONTRATO','TIPO DE CONTRATO'])),
+          empresa,
+          fantasia:        colStr(row, ['NOME FANTASIA','FANTASIA']),
+          bairro:          colStr(row, ['BAIRRO']),
+          respVistoria:    colStr(row, ['NOME RESPONSÁVEL DA VISTORIA','RESP. VISTORIA','RESP VISTORIA']),
+          contatoVistoria: colStr(row, ['CONTATO DO RESPONS','VIISTORIA','VISTORIA']),
+          eventos:         colMixed(row, ['ENVIO EVENTOS','EVENTOS']),
+          // Só data
+          dataContrato:    colDate(row, ['DATA CONTRATO','DATA DO CONTRATO']),
+          dataVistoria:    colDate(row, ['DATA VISTORIA']),
+          dataReuniao:     colDate(row, ['DATA REUNIÃO','DATA REUNIAO','REUNIÃO DE ENTREGA']),
+          // MISTAS: data ou texto (OK, NAO TEM, FAZER, ANUAL, etc.)
+          pgtoSinal:       colMixed(row, ['PGTO DO SINAL','PGTO SINAL','PAGAMENTO SINAL']),
+          planilha:        colMixed(row, ['PLANILHA RECEBIDA','PLANILHA']),
+          procuracao:      colMixed(row, ['PROCURA','PROCURAÇÃO','PROCURACAO']),
+          soc:             colMixed(row, ['CADASTRO PLANILHA NO SOC','CADASTRO PLANILHA','SOC']),
+          checklist:       colMixed(row, ['CHECKLIST']),
+          nr1psico:        colMixed(row, ['NR 1 - PSICO','NR1 PSICO','NR1-PSICO']),
+          nr1rel:          colMixed(row, ['NR 1 - RELATÓRIO','NR 1 - RELATORIO','NR1 RELATÓRIO','NR1-REL','RELATÓRIO FINALIZADO']),
+          ghe:             colMixed(row, ['CADASTRO GHE','GHE E RISCOS','GHE']),
+          emissaoPdf:      colMixed(row, ['EMISSÃO PDF','EMISSAO PDF']),
+          pgto2:           colMixed(row, ['PGTO 2 PARCELA','PGTO 2','2 PARCELA']),
+          envioPdf:        colMixed(row, ['ENVIO PDF']),
+        });
+      }
+
+      if (imported.length === 0) { alert('Nenhuma empresa encontrada na planilha.'); return; }
+      if (!confirm(`Importar ${imported.length} empresas da aba "${sheetName}"?\n\nIsso vai SUBSTITUIR os dados atuais.`)) return;
+
+      records = imported;
+      scheduleSave();
+      renderTable();
+      toast(`✅ ${imported.length} empresas importadas com sucesso!`);
+    } catch(err) {
+      alert('Erro ao ler planilha: ' + err.message);
+      console.error(err);
+    }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function setupScrollSync() {
+  const scrollX = document.getElementById('scroll-x');
+  const scrollBottom = document.getElementById('scroll-bottom');
+  const spacer = document.getElementById('scroll-spacer');
+
+  function updateSpacer() {
+    if (scrollX) spacer.style.width = scrollX.scrollWidth + 'px';
+  }
+
+  scrollBottom.addEventListener('scroll', () => {
+    if (scrollX) scrollX.scrollLeft = scrollBottom.scrollLeft;
+  });
+  if (scrollX) {
+    scrollX.addEventListener('scroll', () => {
+      scrollBottom.scrollLeft = scrollX.scrollLeft;
+    });
+  }
+
+  const obs = new MutationObserver(updateSpacer);
+  if (scrollX) obs.observe(scrollX, {childList: true, subtree: true});
+  updateSpacer();
+  setTimeout(updateSpacer, 500);
+}
+
+// ─── SIRENE NOVA EMPRESA ─────────────────────────────────────────────────────
+function isNova(r) {
+  if (!r.createdAt) return false;
+  const diff = (Date.now() - new Date(r.createdAt).getTime()) / (1000*60*60*24);
+  return diff <= 3;
+}
+
+function verificarNovas() {
+  const novas = records.filter(isNova);
+  if (novas.length === 0) return;
+  // Mostra a mais recente primeiro
+  novas.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const r = novas[0];
+  const horas = Math.floor((Date.now() - new Date(r.createdAt).getTime()) / (1000*60*60));
+  const dias  = Math.floor(horas / 24);
+  const tempoStr = dias === 0
+    ? (horas === 0 ? 'Agora mesmo!' : `Há ${horas}h`)
+    : `Há ${dias} dia${dias>1?'s':''}`;
+
+  document.getElementById('sirene-nome').textContent = r.empresa || '(nome não preenchido)';
+  document.getElementById('sirene-info').textContent =
+    `${r.bairro ? r.bairro + ' · ' : ''}${r.respComercial ? 'Resp: ' + r.respComercial + ' · ' : ''}${tempoStr}`;
+  document.getElementById('sirene-badge').textContent =
+    novas.length > 1 ? `🆕 ${novas.length} NOVAS EMPRESAS` : '🆕 NOVA EMPRESA';
+  document.getElementById('sirene-modal').classList.add('open');
+
+  // Toca som de alerta (beep via Web Audio API)
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.18, 0.36].forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'square';
+      gain.gain.setValueAtTime(0.18, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.14);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.15);
+    });
+  } catch(e) {}
+}
+
+function fecharSirene() {
+  document.getElementById('sirene-modal').classList.remove('open');
+}
+
+(function init() {
+  if (SCRIPT_URL || bannerHidden) {
+    hideBanner();
+  } else {
+    document.getElementById('toolbar').style.top = 'calc(var(--header-h) + 44px)';
+    document.getElementById('table-wrap').style.marginTop = 'calc(var(--header-h) + 44px + 46px)';
+    document.getElementById('scroll-x').style.maxHeight = 'calc(100vh - var(--header-h) - 44px - 46px)';
+  }
+  if (SCRIPT_URL) { loadFromSheets(); }
+  else { loadLocal(); }
+  setTimeout(setupScrollSync, 100);
+
+  // Alerta automático de prazo ao iniciar
+  setTimeout(() => {
+    const atrasadas = records.filter(r => !r.finalizado && calcDiasContrato(r) > 20);
+    if (atrasadas.length > 0) {
+      toast(`🚨 ${atrasadas.length} empresa(s) com prazo estourado! Verifique os alertas.`);
+    }
+  }, 1500);
+
+  // Sirene de nova empresa
+  setTimeout(verificarNovas, 2000);
+})();
+</script>
+</body>
+</html>
