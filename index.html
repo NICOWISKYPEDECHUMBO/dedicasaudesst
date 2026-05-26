@@ -975,25 +975,33 @@ function closeAlertas() { document.getElementById('modal-alertas').classList.rem
 // ─── RELATÓRIO POR PENDÊNCIA ──────────────────────────────────────────────────
 let relFiltroAtivo = null;
 
-function openRelatorio() {
+function resetRelatorio() {
   relFiltroAtivo = null;
   renderRelFiltros();
-  document.getElementById('rel-results').innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
+  // reseta o wrap (container principal da tabela)
+  const wrap = document.getElementById('rel-wrap');
+  if (wrap) wrap.innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
+  // reseta o div interno se existir
+  const res = document.getElementById('rel-results');
+  if (res) res.innerHTML = '';
   document.getElementById('rel-count').textContent = '';
   document.getElementById('procv-input').value = '';
   document.getElementById('procv-col').value = 'todas';
-  document.getElementById('modal-relatorio').classList.add('open');
-
 }
-function closeRelatorio() { document.getElementById('modal-relatorio').classList.remove('open'); }
+
+function openRelatorio() {
+  resetRelatorio();
+  document.getElementById('modal-relatorio').classList.add('open');
+}
+
+function closeRelatorio() {
+  document.getElementById('modal-relatorio').classList.remove('open');
+  // reseta estado ao fechar para próxima abertura funcionar
+  resetRelatorio();
+}
 
 function limparRelatorio() {
-  relFiltroAtivo = null;
-  document.getElementById('procv-input').value = '';
-  document.getElementById('procv-col').value = 'todas';
-  renderRelFiltros();
-  document.getElementById('rel-results').innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
-  document.getElementById('rel-count').textContent = '';
+  resetRelatorio();
 }
 
 function renderRelFiltros() {
