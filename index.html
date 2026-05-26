@@ -112,21 +112,35 @@
   /* MODAL RELATÓRIO */
   .rel-back { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 7000; display: none; align-items: center; justify-content: center; }
   .rel-back.open { display: flex; }
-  .rel-box { background: #fff; border-radius: 14px; padding: 28px 32px; max-width: 700px; width: 95%; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
-  .rel-box h3 { font-size: 18px; margin-bottom: 4px; color: #1e40af; }
-  .rel-box .sub { font-size: 12px; color: var(--texto-muted); margin-bottom: 16px; }
-  .rel-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .rel-box { background: #fff; border-radius: 14px; padding: 24px 28px 20px; width: 98vw; max-width: 1400px; height: 92vh; display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
+  .rel-box h3 { font-size: 18px; margin-bottom: 4px; color: #1e40af; flex-shrink:0; }
+  .rel-box .sub { font-size: 12px; color: var(--texto-muted); margin-bottom: 12px; flex-shrink:0; }
+  .rel-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; flex-shrink:0; }
   .rel-btn { background: var(--cinza-light); border: 1.5px solid var(--cinza-borda); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-weight: 600; color: var(--texto); transition: all 0.15s; }
   .rel-btn:hover { border-color: #1e40af; color: #1e40af; }
   .rel-btn.active { background: #1e40af; color: #fff; border-color: #1e40af; }
-  .rel-results { border: 1px solid var(--cinza-borda); border-radius: 8px; overflow: hidden; }
-  .rel-results table { width: 100%; border-collapse: collapse; }
-  .rel-results th { background: #1f2d40; color: #fff; font-size: 11px; padding: 8px 10px; text-align: left; }
-  .rel-results td { padding: 7px 10px; font-size: 12px; border-bottom: 1px solid var(--cinza-borda); }
-  .rel-results tr:last-child td { border-bottom: none; }
-  .rel-results tr:hover td { background: #f8faff; }
+  /* rel-wrap = container principal com scroll X e Y */
+  .rel-results-wrap { flex: 1; min-height: 0; border: 1px solid var(--cinza-borda); border-radius: 8px; overflow: auto; position: relative; }
+  .rel-results-wrap::-webkit-scrollbar { width: 12px; height: 12px; }
+  .rel-results-wrap::-webkit-scrollbar-track { background: #e5e7eb; }
+  .rel-results-wrap::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 6px; border: 3px solid #e5e7eb; }
+  .rel-results-wrap::-webkit-scrollbar-corner { background: #e5e7eb; }
+  /* tabela diretamente dentro do wrap */
+  .rel-table { border-collapse: collapse; min-width: max-content; width: 100%; font-size: 11px; }
+  .rel-table thead th {
+    position: sticky; top: 0; z-index: 20;
+    background: #1f2d40 !important; color: #fff !important;
+    font-size: 10px; padding: 9px 8px; text-align: left; white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .rel-table td { padding: 6px 8px; font-size: 11px; border-bottom: 1px solid var(--cinza-borda); white-space: nowrap; }
+  .rel-table tr:last-child td { border-bottom: none; }
+  .rel-table tr:hover td { background: #f8faff; }
+  .rel-results { }
   .rel-empty { text-align: center; padding: 30px; color: var(--texto-muted); font-size: 13px; }
-  .rel-count { font-size: 12px; color: var(--texto-muted); margin-bottom: 8px; }
+  .rel-count { font-size: 12px; color: var(--texto-muted); margin-bottom: 8px; flex-shrink: 0; }
+  .rel-footer { flex-shrink: 0; margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; }
 
   /* BADGE ALERTA NA TABELA */
   tr.prazo-critico td { background: #fff5f5 !important; }
@@ -166,7 +180,7 @@
     position: sticky; left: 0; z-index: 10;
   }
   th.g-fin    { background: #243040; min-width: 80px; }
-  th.g-emp    { background: #1f2d40; min-width: 220px; text-align: left; padding-left: 10px; }
+  th.g-emp    { background: #1f2d40; min-width: 160px; text-align: left; padding-left: 10px; }
   th.g-contrato { background: #1a3560; }
   th.g-docs   { background: #0f4a2e; }
   th.g-vistoria { background: #3a1555; }
@@ -285,6 +299,30 @@
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: #f0f2f5; }
   ::-webkit-scrollbar-thumb { background: #c4c8d0; border-radius: 4px; }
+
+  #print-area { display: none; }
+  @media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    body * { visibility: hidden !important; }
+    #print-area { display: block !important; }
+    #print-area, #print-area * { visibility: visible !important; }
+    #print-area {
+      position: fixed; top: 0; left: 0; width: 100%;
+      font-size: 7px; color: #000; background: #fff;
+    }
+    #print-area table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    #print-area th {
+      background: #1f2d40 !important; color: #fff !important;
+      padding: 3px 4px; font-size: 7px; text-align: left;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      word-break: break-word; white-space: normal;
+    }
+    #print-area td { padding: 3px 4px; border: 0.5px solid #ccc; font-size: 7px; word-break: break-word; white-space: normal; }
+    #print-area tr:nth-child(even) td { background: #f5f5f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #print-area .print-header { margin-bottom: 6px; }
+    #print-area .print-header h2 { font-size: 11px; margin: 0 0 2px; }
+    #print-area .print-header p { font-size: 8px; color: #555; margin: 0; }
+  }
 
   /* ── ALERTA SIRENE NOVA EMPRESA ─────────────────────────────── */
   @keyframes sirene-bg {
@@ -436,13 +474,14 @@
 <thead>
 <tr>
   <th class="g-fin th-fix">FINALIZADO</th>
-  <th class="g-emp th-fix" style="left:80px">RESP COMERCIAL</th>
+  <th class="g-emp th-fix" style="left:80px;min-width:130px;max-width:130px">RESP COMERCIAL</th>
   <th class="g-contrato">RESP DOC</th>
   <th class="g-contrato">DATA CONTRATO</th>
   <th class="g-contrato">PGTO DO SINAL</th>
   <th class="g-contrato">TIPO CONTRATO</th>
   <th class="g-emp" style="min-width:220px">EMPRESA</th>
   <th class="g-emp">NOME FANTASIA</th>
+  <th class="g-emp">VÍDEO INTEGRAÇÃO</th>
   <th class="g-vistoria">DATA VISTORIA</th>
   <th class="g-vistoria">BAIRRO</th>
   <th class="g-vistoria">NOME RESPONSÁVEL DA VISTORIA</th>
@@ -576,11 +615,15 @@
     </div>
     <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Filtrar por serviço pendente:</div>
     <div class="rel-filters" id="rel-filters"></div>
-    <div class="rel-count" id="rel-count" style="margin-top:10px"></div>
-    <div class="rel-results" id="rel-results"></div>
-    <div class="alert-close" style="margin-top:12px">
-      <button onclick="limparRelatorio()" style="margin-right:8px;background:#f3f4f6;border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer">Limpar</button>
-      <button onclick="closeRelatorio()">Fechar</button>
+    <div class="rel-count" id="rel-count"></div>
+    <div class="rel-results-wrap" id="rel-wrap">
+      <div class="rel-results" id="rel-results">
+        <div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>
+      </div>
+    </div>
+    <div class="rel-footer">
+      <button onclick="limparRelatorio()" style="background:#f3f4f6;border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-weight:600">Limpar</button>
+      <button onclick="closeRelatorio()" style="background:#f3f4f6;border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-weight:600">Fechar</button>
     </div>
   </div>
 </div>
@@ -626,7 +669,7 @@ function getSheet() {
   if (!sh) {
     sh = ss.insertSheet(SHEET_NAME);
     sh.appendRow(['id','finalizado','respComercial','respDoc','dataContrato','pgtoSinal',
-      'tipoContrato','empresa','fantasia','dataVistoria','bairro','respVistoria','contatoVistoria',
+      'tipoContrato','empresa','fantasia','videoIntegracao','dataVistoria','bairro','respVistoria','contatoVistoria',
       'planilha','procuracao','soc','checklist','nr1psico',
       'nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao','eventos','createdAt']);
   }
@@ -940,6 +983,7 @@ function openRelatorio() {
   document.getElementById('procv-input').value = '';
   document.getElementById('procv-col').value = 'todas';
   document.getElementById('modal-relatorio').classList.add('open');
+
 }
 function closeRelatorio() { document.getElementById('modal-relatorio').classList.remove('open'); }
 
@@ -961,28 +1005,120 @@ function renderRelFiltros() {
   }).join('');
 }
 
+function fmtD(v) {
+  if (!v) return '—';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y,m,d] = v.split('-');
+    return d+'/'+m+'/'+y;
+  }
+  return v;
+}
+
 function renderRelTabela(resultados, titulo) {
   document.getElementById('rel-count').textContent = `${resultados.length} empresa(s) encontrada(s) — ${titulo}`;
+  const wrap = document.getElementById('rel-wrap');
+
   if (resultados.length === 0) {
-    document.getElementById('rel-results').innerHTML = '<div class="rel-empty">✅ Nenhuma empresa encontrada!</div>';
+    wrap.innerHTML = '<div class="rel-empty">✅ Nenhuma empresa encontrada!</div>';
     return;
   }
-  document.getElementById('rel-results').innerHTML = `
-    <table>
-      <thead><tr><th>EMPRESA</th><th>FANTASIA</th><th>BAIRRO</th><th>RESP COMERCIAL</th><th>CONTATO VISTORIA</th><th>DATA CONTRATO</th><th>DIAS</th></tr></thead>
-      <tbody>${resultados.map(r => {
-        const dias = calcDiasContrato(r);
-        return `<tr>
-          <td><b>${esc(r.empresa || '—')}</b></td>
-          <td>${esc(r.fantasia||'—')}</td>
-          <td>${esc(r.bairro||'—')}</td>
-          <td>${esc(r.respComercial||'—')}</td>
-          <td>${esc(r.contatoVistoria||'—')}</td>
-          <td>${r.dataContrato||'—'}</td>
-          <td>${dias > 0 ? '<b style="color:'+(dias>20?'#dc2626':dias>10?'#f59e0b':'inherit')+'">'+dias+'d</b>' : '—'}</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>`;
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  const thead = `<thead><tr>
+    <th>#</th><th>EMPRESA</th><th>FANTASIA</th><th>VÍDEO INTEGRAÇÃO</th><th>BAIRRO</th>
+    <th>RESP COMERCIAL</th><th>RESP DOC</th><th>DATA CONTRATO</th><th>DIAS</th>
+    <th>PGTO SINAL</th><th>TIPO CONTRATO</th><th>DATA VISTORIA</th>
+    <th>RESP VISTORIA</th><th>CONTATO VISTORIA</th><th>PLANILHA</th>
+    <th>PROCURAÇÃO</th><th>SOC</th><th>CHECKLIST</th><th>NR1 PSICO</th>
+    <th>NR1 RELATÓRIO</th><th>GHE</th><th>EMISSÃO PDF</th>
+    <th>PGTO 2ª</th><th>ENVIO PDF</th><th>REUNIÃO</th><th>EVENTOS</th>
+  </tr></thead>`;
+
+  const tbody = `<tbody>${resultados.map((r,i) => {
+    const dias = calcDiasContrato(r);
+    const dCor = dias > 20 ? '#dc2626' : dias > 10 ? '#f59e0b' : 'inherit';
+    return `<tr>
+      <td style="color:#6b7280;font-size:10px">${i+1}</td>
+      <td><b>${esc(r.empresa||'—')}</b></td>
+      <td>${esc(r.fantasia||'—')}</td>
+      <td>${esc(r.videoIntegracao||'—')}</td>
+      <td>${esc(r.bairro||'—')}</td>
+      <td>${esc(r.respComercial||'—')}</td>
+      <td>${esc(r.respDoc||'—')}</td>
+      <td>${fmtD(r.dataContrato)}</td>
+      <td style="color:${dCor};font-weight:${dias>10?'700':'400'}">${dias>0?dias+'d':'—'}</td>
+      <td>${esc(r.pgtoSinal||'—')}</td>
+      <td>${esc(r.tipoContrato||'—')}</td>
+      <td>${fmtD(r.dataVistoria)}</td>
+      <td>${esc(r.respVistoria||'—')}</td>
+      <td>${esc(r.contatoVistoria||'—')}</td>
+      <td>${fmtD(r.planilha)}</td>
+      <td>${fmtD(r.procuracao)}</td>
+      <td>${fmtD(r.soc)}</td>
+      <td>${fmtD(r.checklist)}</td>
+      <td>${fmtD(r.nr1psico)}</td>
+      <td>${fmtD(r.nr1rel)}</td>
+      <td>${fmtD(r.ghe)}</td>
+      <td>${fmtD(r.emissaoPdf)}</td>
+      <td>${fmtD(r.pgto2)}</td>
+      <td>${fmtD(r.envioPdf)}</td>
+      <td>${fmtD(r.dataReuniao)}</td>
+      <td>${esc(r.eventos||'—')}</td>
+    </tr>`;
+  }).join('')}</tbody>`;
+
+  // Injecta diretamente no wrap que tem overflow:auto
+  wrap.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f8faff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:30;">
+      <span style="font-size:12px;color:#6b7280">${resultados.length} empresa(s) · ${hoje}</span>
+      <button onclick="imprimirRelatorio()" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
+    </div>
+    <table class="rel-table">${thead}${tbody}</table>`;
+
+  // Print area
+  let pa = document.getElementById('print-area');
+  if (!pa) { pa = document.createElement('div'); pa.id = 'print-area'; document.body.appendChild(pa); }
+  pa.innerHTML = `<div class="print-header"><h2>📊 Relatório — ${titulo}</h2><p>${resultados.length} empresa(s) · ${hoje}</p></div><table>${thead}${tbody}</table>`;
+}
+
+function imprimirRelatorio() {
+  window.print();
+}
+
+// Sincroniza barras de scroll horizontal do relatório
+function setupRelScroll() {
+  const inner = document.getElementById('rel-results-inner');
+  const top   = document.getElementById('rel-scroll-top');
+  const bot   = document.getElementById('rel-scroll-bot');
+  if (!inner || !top || !bot) return;
+
+  function updateSpacers() {
+    const w = inner.scrollWidth;
+    document.getElementById('rel-scroll-top-inner').style.width = w + 'px';
+    document.getElementById('rel-scroll-bot-inner').style.width = w + 'px';
+  }
+
+  // scroll do conteúdo move as barras
+  inner.addEventListener('scroll', () => {
+    top.scrollLeft = inner.scrollLeft;
+    bot.scrollLeft = inner.scrollLeft;
+  });
+  // barra do topo move conteúdo e barra de baixo
+  top.addEventListener('scroll', () => {
+    inner.scrollLeft = top.scrollLeft;
+    bot.scrollLeft   = top.scrollLeft;
+  });
+  // barra de baixo move conteúdo e barra do topo
+  bot.addEventListener('scroll', () => {
+    inner.scrollLeft = bot.scrollLeft;
+    top.scrollLeft   = bot.scrollLeft;
+  });
+
+  updateSpacers();
+  // Reatualiza quando tabela renderizar
+  const obs = new MutationObserver(updateSpacers);
+  obs.observe(inner, { childList: true, subtree: true });
 }
 
 function aplicarRelFiltro(id) {
@@ -1089,7 +1225,7 @@ function addRow() {
     id:uid(), finalizado:false,
     createdAt: new Date().toISOString(),
     respComercial:'', respDoc:'', dataContrato:'', pgtoSinal:'', tipoContrato:'',
-    empresa:'', fantasia:'', dataVistoria:'', bairro:'',
+    empresa:'', fantasia:'', videoIntegracao:'', dataVistoria:'', bairro:'',
     respVistoria:'', contatoVistoria:'',
     planilha:'', procuracao:'', soc:'',
     checklist:'', nr1psico:'', nr1rel:'', ghe:'',
@@ -1163,6 +1299,7 @@ function renderTable() {
           onchange="setField(${idx},'fantasia',this.value)" onblur="setField(${idx},'fantasia',this.value)"></div>
       </td>
       <td class="td-txt">${txtHtml(idx,'fantasia','Nome fantasia')}</td>
+      <td class="td-txt">${txtHtml(idx,'videoIntegracao','Link ou data')}</td>
       <td class="td-date">${dateHtml(idx,'dataVistoria')}</td>
       <td class="td-txt">${txtHtml(idx,'bairro','Bairro')}</td>
       <td class="td-txt">${txtHtml(idx,'respVistoria','Nome responsável')}</td>
@@ -1323,6 +1460,7 @@ function importarPlanilha(input) {
           tipoContrato:    normTipo(colStr(row, ['TIPO CONTRATO','TIPO DE CONTRATO'])),
           empresa,
           fantasia:        colStr(row, ['NOME FANTASIA','FANTASIA']),
+          videoIntegracao: colStr(row, ['VIDEO INTEGRACAO','VÍDEO INTEGRAÇÃO','VIDEO','INTEGRAÇÃO']),
           bairro:          colStr(row, ['BAIRRO']),
           respVistoria:    colStr(row, ['NOME RESPONSÁVEL DA VISTORIA','RESP. VISTORIA','RESP VISTORIA']),
           contatoVistoria: colStr(row, ['CONTATO DO RESPONS','VIISTORIA','VISTORIA']),
