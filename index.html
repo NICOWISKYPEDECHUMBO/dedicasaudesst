@@ -1013,7 +1013,7 @@ async function loadFromSupa(tentativa) {
   setSync('syncing', 'Carregando' + (tentativa > 1 ? ' (tentativa ' + tentativa + ')' : '') + '...');
   try {
     const resp = await fetch(
-      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?select=*&order=empresa&limit=10000',
+      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?select=*&order=dataContrato.asc.nullsfirst&limit=10000',
       {
         method: 'GET',
         headers: {
@@ -1058,11 +1058,15 @@ async function saveToSupa() {
     );
     if (!del.ok) throw new Error('DELETE HTTP ' + del.status);
 
-    // 2. Insere em lotes de 100
+    // 2. Insere em lotes de 100 — garante ID único em cada registro
     const LOTE = 100;
-    for (let i = 0; i < records.length; i += LOTE) {
-      const lote = records.slice(i, i + LOTE);
-      setSync('syncing', `Salvando ${i+lote.length}/${records.length}...`);
+    const recordsComId = records.map((r, idx) => ({
+      ...r,
+      id: r.id || ('rec_' + Date.now() + '_' + idx)
+    }));
+    for (let i = 0; i < recordsComId.length; i += LOTE) {
+      const lote = recordsComId.slice(i, i + LOTE);
+      setSync('syncing', 'Salvando ' + (i+lote.length) + '/' + recordsComId.length + '...');
       const ins = await fetch(
         SUPA_URL + '/rest/v1/' + SUPA_TABLE,
         {
