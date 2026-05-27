@@ -974,12 +974,22 @@ function parseDate(val) {
   return '';
 }
 
+// Valida se uma data YYYY-MM-DD é real (ex: 2024-02-30 não existe)
+function validarData(d) {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return '';
+  const [y, m, day] = d.split('-').map(Number);
+  const dt = new Date(y, m-1, day);
+  // Se o mês virou, a data era inválida (ex: 30/02 vira 01/03)
+  if (dt.getFullYear() !== y || dt.getMonth()+1 !== m || dt.getDate() !== day) return '';
+  return d;
+}
+
 // Campos que devem ser tratados como data
 const DATE_FIELDS = ['dataContrato','dataVistoria','planilha','procuracao','soc',
   'checklist','nr1psico','nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao'];
 
 function normalizarDatasRecord(r) {
-  DATE_FIELDS.forEach(f => { if (r[f] !== undefined) r[f] = parseDate(r[f]); });
+  DATE_FIELDS.forEach(f => { if (r[f] !== undefined) r[f] = validarData(parseDate(r[f])); });
   return r;
 }
 
@@ -998,20 +1008,19 @@ function supaHeaders() {
   };
 }
 
-async function loadFromSupa() {
-  setSync('syncing', 'Carregando...');
+async function loadFromSupa(tentativa) {
+  tentativa = tentativa || 1;
+  setSync('syncing', 'Carregando' + (tentativa > 1 ? ' (tentativa ' + tentativa + ')' : '') + '...');
   try {
     const resp = await fetch(
       SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?select=*&order=empresa&limit=10000',
       {
         method: 'GET',
-        mode: 'cors',
         headers: {
           'apikey': SUPA_KEY,
           'Authorization': 'Bearer ' + SUPA_KEY,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Client-Info': 'supabase-js/2.0.0'
+          'Accept': 'application/json'
         }
       }
     );
@@ -1027,7 +1036,12 @@ async function loadFromSupa() {
     return true;
   } catch(e) {
     console.error('Supabase load:', e.message || e);
-    setSync('error', 'Erro Supabase — ' + (e.message || 'sem conexão'));
+    // Tenta novamente até 3 vezes com delay crescente
+    if (tentativa < 3) {
+      await new Promise(r => setTimeout(r, tentativa * 2000));
+      return loadFromSupa(tentativa + 1);
+    }
+    setSync('error', 'Usando dados locais');
     loadLocal();
     return false;
   }
@@ -1036,19 +1050,37 @@ async function loadFromSupa() {
 async function saveToSupa() {
   try {
     setSync('syncing', 'Salvando...');
-    const resp = await fetch(
-      SUPA_URL + '/rest/v1/' + SUPA_TABLE,
-      {
-        method: 'POST',
-        headers: { ...supaHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify(records)
-      }
+
+    // 1. Apaga TUDO de uma vez
+    const del = await fetch(
+      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?id=neq.XXXXXXX',
+      { method: 'DELETE', headers: supaHeaders() }
     );
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    setSync('', 'Salvo ✓');
+    if (!del.ok) throw new Error('DELETE HTTP ' + del.status);
+
+    // 2. Insere em lotes de 100
+    const LOTE = 100;
+    for (let i = 0; i < records.length; i += LOTE) {
+      const lote = records.slice(i, i + LOTE);
+      setSync('syncing', `Salvando ${i+lote.length}/${records.length}...`);
+      const ins = await fetch(
+        SUPA_URL + '/rest/v1/' + SUPA_TABLE,
+        {
+          method: 'POST',
+          headers: { ...supaHeaders(), 'Prefer': 'return=minimal' },
+          body: JSON.stringify(lote)
+        }
+      );
+      if (!ins.ok) {
+        const e = await ins.text();
+        throw new Error('INSERT lote ' + i + ' HTTP ' + ins.status + ': ' + e);
+      }
+    }
+
+    setSync('', 'Salvo ✓ (' + records.length + ' registros)');
   } catch(e) {
     console.error('Supabase save:', e);
-    setSync('error', 'Erro ao salvar');
+    setSync('error', 'Erro ao salvar: ' + e.message);
   }
 }
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1643,7 +1675,7 @@ function importarPlanilha(input) {
         return '';
       }
 
-      function colDate(row, ...keys) { return toDate(getRaw(row, ...keys)); }
+      function colDate(row, ...keys) { return validarData(toDate(getRaw(row, ...keys))); }
       function colMixed(row, ...keys) {
         const v = getRaw(row, ...keys);
         if (v === null) return '';
@@ -2060,8 +2092,11 @@ function salvarListaSuspensa() {
     document.getElementById('toolbar').style.top = 'calc(var(--header-h) + 44px)';
     document.getElementById('table-wrap').style.marginTop = 'calc(var(--header-h) + 44px + 46px)';
   }
-  if (supaAtivo() || SCRIPT_URL) { loadFromSheets(); }
-  else { loadLocal(); }
+  // Aguarda 1s para garantir que a rede está pronta antes de conectar ao Supabase
+  setTimeout(() => {
+    if (supaAtivo() || SCRIPT_URL) { loadFromSheets(); }
+    else { loadLocal(); }
+  }, 1000);
   setTimeout(setupScrollSync, 100);
 
   // Alerta automático de prazo ao iniciar
