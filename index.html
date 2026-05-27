@@ -149,12 +149,17 @@
   .prazo-badge.critico { background: #dc2626; color: #fff; }
   .prazo-badge.atencao { background: #f59e0b; color: #fff; }
 
-  .table-wrap { overflow-x: hidden; padding-bottom: 40px; }
-  .scroll-x-container { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 130px); }
-  .scroll-x-container::-webkit-scrollbar { height: 10px; }
-  .scroll-x-container::-webkit-scrollbar-track { background: #e5e7eb; }
-  .scroll-x-container::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 5px; }
-  .scroll-x-container::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+  /* SOLUÇÃO CABEÇALHO FIXO:
+     - overflow-x no .table-wrap (scroll lateral)
+     - overflow-y no body (scroll vertical)
+     - thead sticky funciona relativo ao viewport quando não há overflow-y no pai */
+  body { overflow-x: hidden; }
+  .table-wrap { overflow-x: auto; padding-bottom: 40px; }
+  .table-wrap::-webkit-scrollbar { height: 10px; }
+  .table-wrap::-webkit-scrollbar-track { background: #e5e7eb; }
+  .table-wrap::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 5px; }
+  .table-wrap::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+  .scroll-x-container { overflow: visible; }
   .scroll-bottom-bar {
     position: fixed; bottom: 0; left: 0; right: 0; height: 16px;
     overflow-x: auto; overflow-y: hidden; z-index: 900;
@@ -166,9 +171,7 @@
   .scroll-bottom-bar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
   .scroll-bottom-spacer { height: 1px; }
   table { border-collapse: collapse; min-width: 100%; background: #fff; }
-  thead { position: sticky; top: 0; z-index: 50; }
-  /* garante que o scroll-x-container não esconde o thead atrás do header+toolbar */
-  .scroll-x-container { padding-top: 0; }
+  thead { position: relative; z-index: 1; }
 
   thead tr th {
     background: #1f2d40; color: #fff;
@@ -295,6 +298,76 @@
   .conf-cancel:hover { background: #e5e7eb; }
   .conf-ok { background: #dc2626; color: #fff; }
   .conf-ok:hover { background: #b91c1c; }
+
+  /* ── NOVOS MODAIS ─────────────────────────────────── */
+  .cnpj-back { position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:8000;display:none;align-items:center;justify-content:center; }
+  .cnpj-back.open { display:flex; }
+  .cnpj-box { background:#fff;border-radius:16px;padding:32px 36px;max-width:460px;width:92%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.28); }
+  .cnpj-box h3 { font-size:18px;margin-bottom:8px;color:#dc2626; }
+  .cnpj-box p { font-size:13px;color:#6b7280;margin-bottom:20px;line-height:1.6; }
+  .cnpj-btns { display:flex;gap:10px;justify-content:center; }
+  .cnpj-btns button { border-radius:9px;padding:10px 26px;font-size:13px;font-weight:700;cursor:pointer;border:none; }
+  .cnpj-btn-cancel { background:#f3f4f6;color:#374151; }
+  .cnpj-btn-ok { background:#dc2626;color:#fff; }
+  .carimbo-back { position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:8000;display:none;align-items:center;justify-content:center; }
+  .carimbo-back.open { display:flex; }
+  .carimbo-box { background:#fff;border-radius:16px;padding:28px 32px;max-width:600px;width:95%;box-shadow:0 8px 40px rgba(0,0,0,0.28);max-height:90vh;overflow-y:auto; }
+  .carimbo-box h3 { font-size:17px;margin-bottom:4px;color:#1e40af; }
+  .carimbo-box .sub { font-size:12px;color:#6b7280;margin-bottom:16px; }
+  .carimbo-upload { border:2px dashed #d1d5db;border-radius:10px;padding:24px;text-align:center;cursor:pointer;background:#f8faff;margin-bottom:14px; }
+  .carimbo-upload:hover { border-color:#1e40af;background:#eff6ff; }
+  .carimbo-cfg { background:#f8faff;border-radius:10px;padding:14px;margin-bottom:14px; }
+  .carimbo-cfg label { font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px; }
+  .carimbo-cfg select { width:100%;border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:13px;outline:none;background:#fff;margin-bottom:10px; }
+  .carimbo-match-item { display:flex;align-items:center;gap:10px;padding:8px 10px;background:#f0faf5;border-radius:8px;margin-bottom:6px;font-size:12px; }
+  .carimbo-match-item b { flex:1; }
+  .carimbo-match-item .tag { background:#1e40af;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700; }
+  .carimbo-footer { display:flex;gap:10px;justify-content:flex-end; }
+  .carimbo-footer button { border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;border:none; }
+  .btn-carimbo-cancel { background:#f3f4f6;color:#374151; }
+  .btn-carimbo-apply { background:#1e40af;color:#fff; }
+  .lista-back { position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:8000;display:none;align-items:center;justify-content:center; }
+  .lista-back.open { display:flex; }
+  .lista-box { background:#fff;border-radius:16px;padding:28px 32px;max-width:520px;width:95%;box-shadow:0 8px 40px rgba(0,0,0,0.28);max-height:90vh;overflow-y:auto; }
+  .lista-box h3 { font-size:17px;margin-bottom:4px;color:#1e40af; }
+  .lista-box .sub { font-size:12px;color:#6b7280;margin-bottom:16px; }
+  .lista-col-sel { width:100%;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;outline:none;background:#fff;margin-bottom:12px; }
+  .lista-items { display:flex;flex-direction:column;gap:6px;margin-bottom:12px; }
+  .lista-item-row { display:flex;align-items:center;gap:6px; }
+  .lista-item-row input { flex:1;border:1px solid #d1d5db;border-radius:7px;padding:6px 10px;font-size:12px;outline:none; }
+  .lista-item-row button { background:none;border:none;color:#dc2626;cursor:pointer;font-size:18px;line-height:1;padding:4px; }
+  .lista-add-btn { background:#f0f7ff;border:1.5px dashed #93c5fd;border-radius:7px;padding:7px;width:100%;font-size:12px;font-weight:600;color:#1e40af;cursor:pointer;margin-bottom:14px; }
+  .lista-footer { display:flex;gap:10px;justify-content:flex-end; }
+  .lista-footer button { border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;border:none; }
+  .btn-lista-cancel { background:#f3f4f6;color:#374151; }
+  .btn-lista-save { background:#1e40af;color:#fff; }
+  .badge-novo { display:inline-block;background:#ff2d2d;color:#fff;font-size:9px;font-weight:800;border-radius:8px;padding:1px 5px;margin-left:5px;vertical-align:middle;letter-spacing:0.03em; }
+
+  /* CABEÇALHO FIXO CLONE */
+  #thead-clone {
+    position: fixed;
+    z-index: 999;
+    overflow: hidden;
+    background: #1f2d40;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    display: none;
+  }
+  #thead-clone table { border-collapse: collapse; table-layout: fixed; }
+  #thead-clone th {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    font-weight: 700; padding: 9px 7px; color: #fff;
+    border-right: 1px solid rgba(255,255,255,0.12);
+    white-space: nowrap; text-align: center; vertical-align: middle;
+    overflow: hidden;
+  }
+  #thead-clone th.g-fin     { background: #243040; }
+  #thead-clone th.g-emp     { background: #1f2d40; text-align: left; padding-left: 10px; }
+  #thead-clone th.g-contrato{ background: #1a3560; }
+  #thead-clone th.g-docs    { background: #0f4a2e; }
+  #thead-clone th.g-vistoria{ background: #3a1555; }
+  #thead-clone th.g-nr1     { background: #1a3a8f; }
+  #thead-clone th.g-entrega { background: #0e3868; }
+  #thead-clone th.g-del     { background: #1f2d40; }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: #f0f2f5; }
@@ -466,9 +539,13 @@
     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     Configurar banco
   </button>
+  <button class="btn-cfg" onclick="openCarimbo()" style="color:#0e7490;border-color:#0e7490">🔖 Carimbar planilha</button>
+  <button class="btn-cfg" onclick="openListaSuspensa()" style="color:#7c3aed;border-color:#7c3aed">📋 Lista suspensa</button>
+
   <div class="toolbar-info" id="tbar-info"></div>
 </div>
 
+<div id="thead-clone"></div>
 <div class="table-wrap" id="table-wrap"><div class="scroll-x-container" id="scroll-x">
 <table>
 <thead>
@@ -479,8 +556,10 @@
   <th class="g-contrato">DATA CONTRATO</th>
   <th class="g-contrato">PGTO DO SINAL</th>
   <th class="g-contrato">TIPO CONTRATO</th>
+  <th class="g-contrato">TIPO SERVIÇO</th>
   <th class="g-emp" style="min-width:220px">EMPRESA</th>
   <th class="g-emp">NOME FANTASIA</th>
+  <th class="g-emp">CNPJ</th>
   <th class="g-emp">VÍDEO INTEGRAÇÃO</th>
   <th class="g-vistoria">DATA VISTORIA</th>
   <th class="g-vistoria">BAIRRO</th>
@@ -646,6 +725,79 @@
   </div>
 </div>
 
+<!-- MODAL CNPJ DUPLICADO -->
+<div class="cnpj-back" id="modal-cnpj-dup">
+  <div class="cnpj-box">
+    <h3>⚠️ CNPJ já cadastrado!</h3>
+    <p id="cnpj-dup-msg">Esta empresa já existe no sistema.</p>
+    <div class="cnpj-btns">
+      <button class="cnpj-btn-cancel" onclick="document.getElementById('modal-cnpj-dup').classList.remove('open')">Cancelar</button>
+      <button class="cnpj-btn-ok" id="cnpj-dup-confirmar">Cadastrar mesmo assim</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL CARIMBAR -->
+<div class="carimbo-back" id="modal-carimbo">
+  <div class="carimbo-box">
+    <h3>🔖 Carimbar planilha</h3>
+    <p class="sub">Suba uma planilha, encontre coincidências e carimbe dados nas colunas escolhidas.</p>
+    <div class="carimbo-upload" onclick="document.getElementById('carimbo-file').click()">
+      <div style="font-size:28px;margin-bottom:6px">📂</div>
+      <div style="font-size:13px;font-weight:600;color:#1e40af">Clique para selecionar a planilha</div>
+      <input type="file" id="carimbo-file" accept=".xlsx,.xls" style="display:none" onchange="processarCarimbo(this)">
+    </div>
+    <div class="carimbo-cfg" id="carimbo-cfg" style="display:none">
+      <label>Buscar coincidência por:</label>
+      <select id="carimbo-busca-col"><option value="cnpj">CNPJ</option><option value="empresa">Nome da Empresa</option><option value="fantasia">Nome Fantasia</option></select>
+      <label>Coluna da planilha com o valor de busca:</label>
+      <select id="carimbo-planilha-col-busca"></select>
+      <label>Coluna destino no sistema (o que carimbar):</label>
+      <select id="carimbo-destino-col">
+        <option value="cnpj">CNPJ</option><option value="fantasia">Nome Fantasia</option><option value="bairro">Bairro</option>
+        <option value="respComercial">Resp. Comercial</option><option value="respDoc">Resp. Doc</option>
+        <option value="tipoContrato">Tipo Contrato</option><option value="tipoServico">Tipo Serviço</option>
+        <option value="videoIntegracao">Vídeo Integração</option><option value="pgtoSinal">Pgto Sinal</option>
+        <option value="planilha">Planilha</option><option value="procuracao">Procuração</option>
+        <option value="soc">SOC</option><option value="checklist">Checklist</option>
+        <option value="nr1psico">NR1 Psico</option><option value="nr1rel">NR1 Relatório</option>
+        <option value="ghe">GHE</option><option value="emissaoPdf">Emissão PDF</option>
+        <option value="pgto2">Pgto 2ª</option><option value="envioPdf">Envio PDF</option><option value="eventos">Eventos</option>
+      </select>
+      <label>Coluna da planilha com o valor a carimbar:</label>
+      <select id="carimbo-planilha-col-valor"></select>
+    </div>
+    <div id="carimbo-matches"></div>
+    <div class="carimbo-footer">
+      <button class="btn-carimbo-cancel" onclick="closeCarimbo()">Fechar</button>
+      <button class="btn-carimbo-apply" id="btn-aplicar-carimbo" style="display:none" onclick="aplicarCarimbo()">✅ Aplicar carimbos</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL LISTA SUSPENSA -->
+<div class="lista-back" id="modal-lista">
+  <div class="lista-box">
+    <h3>📋 Gerenciar Lista Suspensa</h3>
+    <p class="sub">Escolha uma coluna e defina os itens do menu suspenso.</p>
+    <select class="lista-col-sel" id="lista-col-sel" onchange="carregarItensLista()">
+      <option value="">— Selecione a coluna —</option>
+      <option value="respComercial">Resp. Comercial</option><option value="respDoc">Resp. Doc</option>
+      <option value="pgtoSinal">Pgto Sinal</option><option value="tipoServico">Tipo Serviço</option>
+      <option value="bairro">Bairro</option><option value="videoIntegracao">Vídeo Integração</option>
+      <option value="planilha">Planilha</option><option value="procuracao">Procuração</option>
+      <option value="soc">SOC</option><option value="checklist">Checklist</option>
+      <option value="nr1psico">NR1 Psico</option><option value="nr1rel">NR1 Relatório</option>
+      <option value="ghe">GHE</option><option value="emissaoPdf">Emissão PDF</option>
+      <option value="pgto2">Pgto 2ª Parcela</option><option value="envioPdf">Envio PDF</option><option value="eventos">Eventos</option>
+    </select>
+    <div class="lista-items" id="lista-items"></div>
+    <button class="lista-add-btn" onclick="adicionarItemLista()">+ Adicionar item</button>
+    <div class="lista-footer">
+      <button class="btn-lista-cancel" onclick="closeListaSuspensa()">Cancelar</button>
+      <button class="btn-lista-save" onclick="salvarListaSuspensa()">💾 Salvar lista</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const APPS_SCRIPT = `var SHEET_NAME = 'Dados';
 function doGet(e) {
@@ -669,7 +821,7 @@ function getSheet() {
   if (!sh) {
     sh = ss.insertSheet(SHEET_NAME);
     sh.appendRow(['id','finalizado','respComercial','respDoc','dataContrato','pgtoSinal',
-      'tipoContrato','empresa','fantasia','videoIntegracao','dataVistoria','bairro','respVistoria','contatoVistoria',
+      'tipoContrato','tipoServico','empresa','fantasia','cnpj','videoIntegracao','dataVistoria','bairro','respVistoria','contatoVistoria',
       'planilha','procuracao','soc','checklist','nr1psico',
       'nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao','eventos','createdAt']);
   }
@@ -831,7 +983,82 @@ function normalizarDatasRecord(r) {
   return r;
 }
 
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+const SUPA_URL   = 'https://oylmpxcxwgvhzgtrrkhj.supabase.co';
+const SUPA_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95bG1weGN4d2d2aHpndHJya2hqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MDgxMTAsImV4cCI6MjA5NTQ4NDExMH0.9YMmP_0Rm6qge5nW1KiSj7-I2pFmIBfr4_qpi1Zg0Us';
+const SUPA_TABLE = 'empresas';
+
+function supaAtivo() { return true; }
+
+function supaHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPA_KEY,
+    'Authorization': 'Bearer ' + SUPA_KEY
+  };
+}
+
+async function loadFromSupa() {
+  setSync('syncing', 'Carregando...');
+  try {
+    const resp = await fetch(
+      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?select=*&order=empresa&limit=10000',
+      {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+          'apikey': SUPA_KEY,
+          'Authorization': 'Bearer ' + SUPA_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Client-Info': 'supabase-js/2.0.0'
+        }
+      }
+    );
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error('HTTP ' + resp.status + ': ' + err);
+    }
+    const data = await resp.json();
+    records = data.map(normalizarDatasRecord);
+    saveLocal();
+    setSync('', 'Supabase ✓');
+    renderTable();
+    return true;
+  } catch(e) {
+    console.error('Supabase load:', e.message || e);
+    setSync('error', 'Erro Supabase — ' + (e.message || 'sem conexão'));
+    loadLocal();
+    return false;
+  }
+}
+
+async function saveToSupa() {
+  try {
+    setSync('syncing', 'Salvando...');
+    const resp = await fetch(
+      SUPA_URL + '/rest/v1/' + SUPA_TABLE,
+      {
+        method: 'POST',
+        headers: { ...supaHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(records)
+      }
+    );
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    setSync('', 'Salvo ✓');
+  } catch(e) {
+    console.error('Supabase save:', e);
+    setSync('error', 'Erro ao salvar');
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 async function loadFromSheets() {
+  // Supabase tem prioridade se configurado
+  if (supaAtivo()) {
+    const ok = await loadFromSupa();
+    if (ok) return;
+  }
   if (!SCRIPT_URL) { loadLocal(); return; }
   setSync('syncing','Carregando...');
   try {
@@ -848,6 +1075,8 @@ async function loadFromSheets() {
 
 async function saveToSheets() {
   saveLocal();
+  // Supabase tem prioridade se configurado
+  if (supaAtivo()) { await saveToSupa(); return; }
   if (!SCRIPT_URL) return;
   setSync('syncing','Salvando...');
   try {
@@ -943,7 +1172,7 @@ function hideBanner() {
   document.getElementById('toolbar').style.top = 'var(--header-h)';
   // toolbar ~46px
   document.getElementById('table-wrap').style.marginTop = 'calc(var(--header-h) + 46px)';
-  document.getElementById('scroll-x').style.maxHeight = 'calc(100vh - var(--header-h) - 46px)';
+  setTimeout(() => { setupScrollSync && setupScrollSync(); }, 150);
 }
 
 // ─── ALERTAS DE PRAZO ─────────────────────────────────────────────────────────
@@ -1034,7 +1263,7 @@ function renderRelTabela(resultados, titulo) {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
   const thead = `<thead><tr>
-    <th>#</th><th>EMPRESA</th><th>FANTASIA</th><th>VÍDEO INTEGRAÇÃO</th><th>BAIRRO</th>
+    <th>#</th><th>EMPRESA</th><th>FANTASIA</th><th>CNPJ</th><th>TIPO SERVIÇO</th><th>VÍDEO INTEGRAÇÃO</th><th>BAIRRO</th>
     <th>RESP COMERCIAL</th><th>RESP DOC</th><th>DATA CONTRATO</th><th>DIAS</th>
     <th>PGTO SINAL</th><th>TIPO CONTRATO</th><th>DATA VISTORIA</th>
     <th>RESP VISTORIA</th><th>CONTATO VISTORIA</th><th>PLANILHA</th>
@@ -1050,6 +1279,8 @@ function renderRelTabela(resultados, titulo) {
       <td style="color:#6b7280;font-size:10px">${i+1}</td>
       <td><b>${esc(r.empresa||'—')}</b></td>
       <td>${esc(r.fantasia||'—')}</td>
+      <td>${esc(r.cnpj||'—')}</td>
+      <td>${esc(r.tipoServico||'—')}</td>
       <td>${esc(r.videoIntegracao||'—')}</td>
       <td>${esc(r.bairro||'—')}</td>
       <td>${esc(r.respComercial||'—')}</td>
@@ -1076,13 +1307,14 @@ function renderRelTabela(resultados, titulo) {
     </tr>`;
   }).join('')}</tbody>`;
 
-  // Injecta diretamente no wrap que tem overflow:auto
-  wrap.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f8faff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:30;">
-      <span style="font-size:12px;color:#6b7280">${resultados.length} empresa(s) · ${hoje}</span>
-      <button onclick="imprimirRelatorio()" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
-    </div>
-    <table class="rel-table">${thead}${tbody}</table>`;
+  // Barra de ações FORA do wrap (não interfere no sticky do thead)
+  const relCount = document.getElementById('rel-count');
+  if (relCount) relCount.innerHTML =
+    `${resultados.length} empresa(s) — ${titulo}
+     &nbsp;<button onclick="imprimirRelatorio()" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>`;
+
+  // Tabela diretamente no wrap — thead sticky funciona
+  if (wrap) wrap.innerHTML = `<table class="rel-table">${thead}${tbody}</table>`;
 
   // Print area
   let pa = document.getElementById('print-area');
@@ -1232,8 +1464,8 @@ function addRow() {
   records.push({
     id:uid(), finalizado:false,
     createdAt: new Date().toISOString(),
-    respComercial:'', respDoc:'', dataContrato:'', pgtoSinal:'', tipoContrato:'',
-    empresa:'', fantasia:'', videoIntegracao:'', dataVistoria:'', bairro:'',
+    respComercial:'', respDoc:'', dataContrato:'', pgtoSinal:'', tipoContrato:'', tipoServico:'', tipoServico:'',
+    empresa:'', fantasia:'', cnpj:'', videoIntegracao:'', dataVistoria:'', bairro:'',
     respVistoria:'', contatoVistoria:'',
     planilha:'', procuracao:'', soc:'',
     checklist:'', nr1psico:'', nr1rel:'', ghe:'',
@@ -1270,7 +1502,7 @@ function renderTable() {
 
   const tbody = document.getElementById('tbody');
   if (visible.length === 0) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="25">Nenhuma empresa. Clique em <b>Nova empresa</b> para começar.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="28">Nenhuma empresa. Clique em <b>Nova empresa</b> para começar.</td></tr>`;
     return;
   }
 
@@ -1292,11 +1524,12 @@ function renderTable() {
         <input type="checkbox" ${r.finalizado?'checked':''} title="Finalizado"
           onchange="setField(${idx},'finalizado',this.checked);this.closest('tr').classList.toggle('is-fin',this.checked)">
       </td>
-      <td class="td-txt">${txtHtml(idx,'respComercial','Resp. Comercial')}</td>
-      <td class="td-txt">${txtHtml(idx,'respDoc','Resp. Doc.')}</td>
+      <td class="td-txt">${customSelectHtml(idx,'respComercial','Resp. Comercial')}</td>
+      <td class="td-txt">${customSelectHtml(idx,'respDoc','Resp. Doc.')}</td>
       <td class="td-date">${dateHtml(idx,'dataContrato')}${prazoBadge}</td>
       <td class="td-txt">${mixedHtml(idx,'pgtoSinal','OK/Data/ANUAL')}</td>
       <td class="td-sel">${selHtml(idx,'tipoContrato',OPTS_TIPO)}</td>
+      <td class="td-txt">${customSelectHtml(idx,'tipoServico','Tipo serviço')}</td>
       <td class="td-emp">
         <div class="emp-nome" style="display:flex;align-items:center">
           <input type="text" value="${esc(r.empresa)}" placeholder="Nome da empresa"
@@ -1307,9 +1540,10 @@ function renderTable() {
           onchange="setField(${idx},'fantasia',this.value)" onblur="setField(${idx},'fantasia',this.value)"></div>
       </td>
       <td class="td-txt">${txtHtml(idx,'fantasia','Nome fantasia')}</td>
-      <td class="td-txt">${txtHtml(idx,'videoIntegracao','Link ou data')}</td>
+      <td class="td-txt" style="min-width:140px">${cnpjHtml(idx)}</td>
+      <td class="td-txt">${customSelectHtml(idx,'videoIntegracao','Link ou data')}</td>
       <td class="td-date">${dateHtml(idx,'dataVistoria')}</td>
-      <td class="td-txt">${txtHtml(idx,'bairro','Bairro')}</td>
+      <td class="td-txt">${customSelectHtml(idx,'bairro','Bairro')}</td>
       <td class="td-txt">${txtHtml(idx,'respVistoria','Nome responsável')}</td>
       <td class="td-txt">${txtHtml(idx,'contatoVistoria','Telefone / email')}</td>
       <td class="td-date">${mixedHtml(idx,'planilha','Data ou OK/NAO TEM')}</td>
@@ -1323,7 +1557,7 @@ function renderTable() {
       <td class="td-date">${mixedHtml(idx,'pgto2','Data ou OK/ANUAL')}</td>
       <td class="td-date">${mixedHtml(idx,'envioPdf','Data ou OK/FAZER')}</td>
       <td class="td-date">${dateHtml(idx,'dataReuniao')}</td>
-      <td class="td-evt">${txtHtml(idx,'eventos','Ex: ENVIO COND 10/01/2025')}</td>
+      <td class="td-evt">${customSelectHtml(idx,'eventos','Eventos')}</td>
       <td class="td-del"><button class="btn-del" onclick="askDelete(${idx})" title="Remover empresa">✕</button></td>
     </tr>`;
   }).join('');
@@ -1513,28 +1747,85 @@ function importarPlanilha(input) {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+function getToolbarBottom() {
+  const toolbar = document.getElementById('toolbar');
+  return toolbar ? toolbar.getBoundingClientRect().bottom + window.scrollY : 110;
+}
+
 function setupScrollSync() {
-  const scrollX = document.getElementById('scroll-x');
-  const scrollBottom = document.getElementById('scroll-bottom');
-  const spacer = document.getElementById('scroll-spacer');
+  const tableWrap = document.getElementById('table-wrap');
+  const scrollBot = document.getElementById('scroll-bottom');
+  const spacer    = document.getElementById('scroll-spacer');
+  const clone     = document.getElementById('thead-clone');
+  const realThead = document.querySelector('thead');
+
+  function getToolbarBottom() {
+    const tb = document.getElementById('toolbar');
+    return tb ? tb.offsetTop + tb.offsetHeight : 110;
+  }
+
+  function buildClone() {
+    if (!realThead || !clone || !tableWrap) return;
+    const rect = tableWrap.getBoundingClientRect();
+    const tbBottom = getToolbarBottom();
+
+    clone.style.top   = tbBottom + 'px';
+    clone.style.left  = rect.left + 'px';
+    clone.style.width = rect.width + 'px';
+    clone.style.display = 'block';
+
+    // Reconstrói o clone copiando os th com larguras reais
+    const origThs = realThead.querySelectorAll('th');
+    let html = '<table><thead><tr>';
+    origThs.forEach(th => {
+      const w = th.getBoundingClientRect().width;
+      html += `<th class="${th.className}" style="width:${w}px;min-width:${w}px">${th.textContent}</th>`;
+    });
+    html += '</tr></thead></table>';
+    clone.innerHTML = html;
+
+    // Aplica scroll horizontal atual
+    const tbl = clone.querySelector('table');
+    if (tbl) tbl.style.marginLeft = -tableWrap.scrollLeft + 'px';
+  }
 
   function updateSpacer() {
-    if (scrollX) spacer.style.width = scrollX.scrollWidth + 'px';
+    if (tableWrap) spacer.style.width = tableWrap.scrollWidth + 'px';
   }
 
-  scrollBottom.addEventListener('scroll', () => {
-    if (scrollX) scrollX.scrollLeft = scrollBottom.scrollLeft;
+  // Scroll horizontal da tabela
+  tableWrap && tableWrap.addEventListener('scroll', () => {
+    if (scrollBot) scrollBot.scrollLeft = tableWrap.scrollLeft;
+    const tbl = clone && clone.querySelector('table');
+    if (tbl) tbl.style.marginLeft = -tableWrap.scrollLeft + 'px';
   });
-  if (scrollX) {
-    scrollX.addEventListener('scroll', () => {
-      scrollBottom.scrollLeft = scrollX.scrollLeft;
-    });
-  }
 
-  const obs = new MutationObserver(updateSpacer);
-  if (scrollX) obs.observe(scrollX, {childList: true, subtree: true});
+  // Barra inferior
+  scrollBot && scrollBot.addEventListener('scroll', () => {
+    if (tableWrap) tableWrap.scrollLeft = scrollBot.scrollLeft;
+  });
+
+  // SCROLL VERTICAL DA PÁGINA — mantém clone sempre no topo correto
+  window.addEventListener('scroll', () => {
+    if (!clone || !tableWrap) return;
+    const tbBottom = getToolbarBottom();
+    clone.style.top = tbBottom + 'px';
+    const tbl = clone.querySelector('table');
+    if (tbl) tbl.style.marginLeft = -tableWrap.scrollLeft + 'px';
+  }, {passive: true});
+
+  window.addEventListener('resize', () => { buildClone(); updateSpacer(); });
+
+  // Reconstrói quando dados carregam
+  const obs = new MutationObserver(() => {
+    updateSpacer();
+    setTimeout(buildClone, 100);
+  });
+  if (tableWrap) obs.observe(tableWrap, {childList: true, subtree: true});
+
   updateSpacer();
-  setTimeout(updateSpacer, 500);
+  setTimeout(buildClone, 300);
+  setTimeout(buildClone, 800);
 }
 
 // ─── SIRENE NOVA EMPRESA ─────────────────────────────────────────────────────
@@ -1584,15 +1875,166 @@ function fecharSirene() {
   document.getElementById('sirene-modal').classList.remove('open');
 }
 
+// ─── LISTAS SUSPENSAS ─────────────────────────────────────────────────────────
+let customLists = JSON.parse(localStorage.getItem('cronograma_lists') || '{}');
+function saveCustomLists() { localStorage.setItem('cronograma_lists', JSON.stringify(customLists)); }
+
+function customSelectHtml(idx, field, ph) {
+  const val = records[idx][field] || '';
+  const lista = customLists[field];
+  if (lista && lista.length > 0) {
+    const foraLista = val && !lista.includes(val);
+    // Se valor existe mas não está na lista, mostra ele mesmo assim + aviso visual
+    const allOpts = foraLista ? ['', ...lista, val] : ['', ...lista];
+    const opts = allOpts.map(o => {
+      const selected = o === val ? ' selected' : '';
+      const label = o ? esc(o) : '— —';
+      return `<option value="${esc(o)}"${selected}>${label}${o === val && foraLista ? ' ⚠️' : ''}</option>`;
+    }).join('');
+    const borderStyle = foraLista ? 'border:1px solid #f59e0b;' : 'border:none;';
+    const title = foraLista ? `title="Valor '${esc(val)}' está fora da lista definida"` : '';
+    return `<select onchange="onCustomSelectChange(${idx},'${field}',this.value,this)" ${title}
+      style="${borderStyle}background:transparent;font-size:12px;width:100%;padding:5px 2px;border-radius:4px;outline:none;cursor:pointer">${opts}</select>`;
+  }
+  return txtHtml(idx, field, ph);
+}
+
+function onCustomSelectChange(idx, field, val, el) {
+  const lista = customLists[field] || [];
+  if (val && lista.length > 0 && !lista.includes(val)) {
+    const ok = confirm('O valor "' + val + '" esta fora da lista definida.\n\nDeseja manter este valor mesmo assim?');
+    if (!ok) {
+      el.value = records[idx][field] || '';
+      return;
+    }
+  }
+  setField(idx, field, val);
+}
+
+function cnpjHtml(idx) {
+  const val = records[idx]['cnpj'] || '';
+  return `<input type="text" value="${esc(val)}" placeholder="00.000.000/0000-00"
+    onchange="onCnpjChange(${idx},this.value)" onblur="onCnpjChange(${idx},this.value)"
+    style="border:none;background:transparent;font-size:12px;width:100%;padding:5px;border-radius:4px;outline:none;"
+    onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">`;
+}
+function formatCnpj(v) {
+  const d = v.replace(/\D/g,'').slice(0,14);
+  if (d.length<=2) return d;
+  if (d.length<=5) return d.slice(0,2)+'.'+d.slice(2);
+  if (d.length<=8) return d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5);
+  if (d.length<=12) return d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'/'+d.slice(8);
+  return d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'/'+d.slice(8,12)+'-'+d.slice(12);
+}
+let cnpjDupCallback = null;
+function onCnpjChange(idx, rawVal) {
+  const val = formatCnpj(rawVal);
+  if (!val) { setField(idx,'cnpj',''); return; }
+  const dup = records.find((r,i) => i!==idx && r.cnpj && r.cnpj.replace(/\D/g,'')=== val.replace(/\D/g,'') && val.replace(/\D/g,'').length>=14);
+  if (dup) {
+    document.getElementById('cnpj-dup-msg').innerHTML = `O CNPJ <b>${val}</b> já está em <b>${esc(dup.empresa||'empresa sem nome')}</b>. Cadastrar novamente?`;
+    document.getElementById('cnpj-dup-confirmar').onclick = () => { setField(idx,'cnpj',val); renderTable(); document.getElementById('modal-cnpj-dup').classList.remove('open'); };
+    document.getElementById('modal-cnpj-dup').classList.add('open');
+  } else { setField(idx,'cnpj',val); }
+}
+
+// ─── CARIMBAR PLANILHA ────────────────────────────────────────────────────────
+let carimboDados = [], carimboRowsExternos = [];
+function openCarimbo() {
+  carimboDados=[]; carimboRowsExternos=[];
+  document.getElementById('carimbo-cfg').style.display='none';
+  document.getElementById('carimbo-matches').innerHTML='';
+  document.getElementById('btn-aplicar-carimbo').style.display='none';
+  document.getElementById('carimbo-file').value='';
+  document.getElementById('modal-carimbo').classList.add('open');
+}
+function closeCarimbo() { document.getElementById('modal-carimbo').classList.remove('open'); }
+function processarCarimbo(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try {
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,raw:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:false});
+      // filtra linhas completamente vazias
+      const rowsFilled = rows.filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
+      if(rowsFilled.length<1){alert('Planilha sem dados!');return;}
+      // se só tem 1 linha, trata como dados sem cabeçalho
+      const finalRows = rowsFilled.length === 1 ? [['Coluna 1','Coluna 2'], ...rowsFilled] : rowsFilled;
+      carimboRowsExternos=finalRows;
+      const opts=finalRows[0].map((h,i)=>`<option value="${i}">${esc(String(h||'Col '+(i+1)))}</option>`).join('');
+      document.getElementById('carimbo-planilha-col-busca').innerHTML=opts;
+      document.getElementById('carimbo-planilha-col-valor').innerHTML=opts;
+      document.getElementById('carimbo-cfg').style.display='block';
+      document.getElementById('carimbo-matches').innerHTML=`<button onclick="buscarCoincidencias()" style="width:100%;background:#0e7490;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px">🔍 Buscar coincidências</button>`;
+    } catch(err){alert('Erro: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function buscarCoincidencias() {
+  const campoBusca=document.getElementById('carimbo-busca-col').value;
+  const colB=parseInt(document.getElementById('carimbo-planilha-col-busca').value);
+  const colV=parseInt(document.getElementById('carimbo-planilha-col-valor').value);
+  const destino=document.getElementById('carimbo-destino-col').value;
+  carimboDados=[];
+  carimboRowsExternos.slice(1).forEach(row=>{
+    const bv=(row[colB]||'').toString().trim();
+    const val=(row[colV]||'').toString().trim();
+    if(!bv||!val) return;
+    const mi=records.findIndex(r=>{
+      if(campoBusca==='cnpj') return r.cnpj && r.cnpj.replace(/\D/g,'')===bv.replace(/\D/g,'') && bv.replace(/\D/g,'').length>=14;
+      return (r[campoBusca]||'').toLowerCase().trim()===bv.toLowerCase();
+    });
+    if(mi>=0) carimboDados.push({matchIdx:mi,destino,valorCarimbo:val,empresa:records[mi].empresa});
+  });
+  const wrap=document.getElementById('carimbo-matches');
+  if(carimboDados.length===0){wrap.innerHTML='<div style="text-align:center;padding:16px;color:#dc2626">❌ Nenhuma coincidência.</div>';document.getElementById('btn-aplicar-carimbo').style.display='none';return;}
+  wrap.innerHTML=`<div style="font-size:12px;font-weight:700;margin-bottom:8px">✅ ${carimboDados.length} coincidência(s):</div>`+carimboDados.map(c=>`<div class="carimbo-match-item"><b>${esc(c.empresa||'—')}</b><span>→</span><span class="tag">${esc(c.valorCarimbo)}</span></div>`).join('');
+  document.getElementById('btn-aplicar-carimbo').style.display='block';
+}
+function aplicarCarimbo() {
+  carimboDados.forEach(c=>{ records[c.matchIdx][c.destino]=c.valorCarimbo; });
+  scheduleSave(); renderTable(); closeCarimbo();
+  toast(`✅ ${carimboDados.length} registro(s) carimbado(s)!`);
+}
+
+// ─── LISTA SUSPENSA ───────────────────────────────────────────────────────────
+function openListaSuspensa() { document.getElementById('lista-col-sel').value=''; document.getElementById('lista-items').innerHTML=''; document.getElementById('modal-lista').classList.add('open'); }
+function closeListaSuspensa() { document.getElementById('modal-lista').classList.remove('open'); }
+function carregarItensLista() {
+  const col=document.getElementById('lista-col-sel').value;
+  renderItensList(col ? (customLists[col]||[]) : []);
+}
+function renderItensList(items) {
+  document.getElementById('lista-items').innerHTML=items.map((item,i)=>`<div class="lista-item-row"><input type="text" value="${esc(item)}" placeholder="Item ${i+1}" oninput="updateListItem(${i},this.value)"><button onclick="removerItemLista(${i})">×</button></div>`).join('');
+}
+function adicionarItemLista() {
+  const col=document.getElementById('lista-col-sel').value;
+  if(!col){alert('Selecione uma coluna!');return;}
+  if(!customLists[col]) customLists[col]=[];
+  customLists[col].push('');
+  renderItensList(customLists[col]);
+  setTimeout(()=>{const ins=document.querySelectorAll('#lista-items input');if(ins.length)ins[ins.length-1].focus();},50);
+}
+function updateListItem(idx,val) { const col=document.getElementById('lista-col-sel').value; if(customLists[col]) customLists[col][idx]=val; }
+function removerItemLista(idx) { const col=document.getElementById('lista-col-sel').value; if(customLists[col]){customLists[col].splice(idx,1);renderItensList(customLists[col]);} }
+function salvarListaSuspensa() {
+  const col=document.getElementById('lista-col-sel').value;
+  if(!col){alert('Selecione!');return;}
+  customLists[col]=Array.from(document.querySelectorAll('#lista-items input')).map(i=>i.value.trim()).filter(Boolean);
+  saveCustomLists(); closeListaSuspensa(); renderTable();
+  toast(`✅ Lista com ${customLists[col].length} item(s) salva!`);
+}
+
 (function init() {
   if (SCRIPT_URL || bannerHidden) {
     hideBanner();
   } else {
     document.getElementById('toolbar').style.top = 'calc(var(--header-h) + 44px)';
     document.getElementById('table-wrap').style.marginTop = 'calc(var(--header-h) + 44px + 46px)';
-    document.getElementById('scroll-x').style.maxHeight = 'calc(100vh - var(--header-h) - 44px - 46px)';
   }
-  if (SCRIPT_URL) { loadFromSheets(); }
+  if (supaAtivo() || SCRIPT_URL) { loadFromSheets(); }
   else { loadLocal(); }
   setTimeout(setupScrollSync, 100);
 
