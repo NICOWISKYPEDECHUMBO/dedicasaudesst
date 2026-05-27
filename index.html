@@ -1598,29 +1598,31 @@ function importarPlanilha(input) {
       const wb = XLSX.read(data, {type:'array', cellDates:true, raw:true});
 
       const sheetName = wb.SheetNames.find(n =>
-        n.toUpperCase().includes('CRONOGRAMA') || n.toUpperCase().includes('ATENDIMENTO')
+        n.toUpperCase().includes('CRONOGRAMA') || n.toUpperCase().includes('ATENDIMENTO') || n.toUpperCase().includes('DADOS')
       ) || wb.SheetNames[0];
 
       const ws = wb.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
       if (rows.length < 2) { alert('Planilha sem dados!'); return; }
 
-      const header = rows[0].map(h => (h||'').toString().toUpperCase().trim());
+      const header = rows[0].map(h => (h||'').toString().trim());
+      const headerUP = header.map(h => h.toUpperCase());
 
-      function colIdx(names) {
-        for (const n of names) {
-          const i = header.findIndex(h => h.includes(n));
-          if (i >= 0) return i;
+      // Detecta se é exportação do sistema (cabeçalhos em inglês/interno)
+      const isInternal = header.includes('respComercial') || header.includes('empresa') && header.includes('finalizado');
+
+      function getRaw(row, ...keys) {
+        for (const k of keys) {
+          // Busca exata primeiro
+          let i = header.indexOf(k);
+          if (i < 0) i = headerUP.indexOf(k.toUpperCase());
+          // Busca parcial
+          if (i < 0) i = headerUP.findIndex(h => h.includes(k.toUpperCase()));
+          if (i >= 0 && row[i] !== null && row[i] !== undefined) return row[i];
         }
-        return -1;
-      }
-      function getRaw(row, names) {
-        const i = colIdx(names);
-        if (i < 0 || row[i] === null || row[i] === undefined) return null;
-        return row[i];
+        return null;
       }
 
-      // Converte para YYYY-MM-DD se for data, senão retorna ''
       function toDate(v) {
         if (v === null || v === undefined || v === '') return '';
         if (v instanceof Date && !isNaN(v)) {
@@ -1641,89 +1643,114 @@ function importarPlanilha(input) {
         return '';
       }
 
-      // Para colunas MISTAS: se for date → YYYY-MM-DD; se for texto → texto
-      function colMixed(row, names) {
-        const v = getRaw(row, names);
+      function colDate(row, ...keys) { return toDate(getRaw(row, ...keys)); }
+      function colMixed(row, ...keys) {
+        const v = getRaw(row, ...keys);
         if (v === null) return '';
         if (v instanceof Date) return toDate(v);
-        const s = v.toString().trim();
-        // Tenta converter como data serial ou ISO
         const asDate = toDate(v);
         if (asDate) return asDate;
-        // É texto mesmo (OK, NAO TEM, FAZER, etc.)
-        return s;
-      }
-
-      // Para colunas só DATA
-      function colDate(row, names) {
-        const v = getRaw(row, names);
-        return toDate(v);
-      }
-
-      // Para colunas só TEXTO
-      function colStr(row, names) {
-        const v = getRaw(row, names);
-        if (v === null || v === undefined) return '';
-        if (v instanceof Date) return toDate(v);
-        // Normaliza tipo contrato
         return v.toString().trim();
       }
-
-      // Normaliza tipo contrato para o dropdown
+      function colStr(row, ...keys) {
+        const v = getRaw(row, ...keys);
+        if (v === null || v === undefined) return '';
+        if (v instanceof Date) return toDate(v);
+        return v.toString().trim();
+      }
       function normTipo(s) {
-        const map = {
-          'ANUAL':'Anual','ANUAL ':'Anual','MENSAL':'Mensal','SEMESTRAL':'Semestral',
-          'AVULSO':'Avulso','ATUALIZAÇÃO':'Atualização','ATUALIZACAO':'Atualização',
-          'AEP':'AEP','AEP E AET':'AEP E AET','OUTRO':'Outro','NAO INFORMADO':'NAO INFORMADO',
-          'NÃO INFORMADO':'NAO INFORMADO'
-        };
+        const map = {'ANUAL':'Anual','MENSAL':'Mensal','SEMESTRAL':'Semestral','AVULSO':'Avulso',
+          'ATUALIZAÇÃO':'Atualização','ATUALIZACAO':'Atualização','AEP':'AEP','AEP E AET':'AEP E AET',
+          'OUTRO':'Outro','NAO INFORMADO':'NAO INFORMADO','NÃO INFORMADO':'NAO INFORMADO'};
         return map[s.toUpperCase().trim()] || s;
       }
 
       const imported = [];
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (!row || row.length < 3) continue;
-        const empI = colIdx(['EMPRESA']);
-        const empresa = empI >= 0 && row[empI] ? row[empI].toString().trim() : '';
-        if (!empresa || empresa.toUpperCase() === 'EMPRESA') continue;
+        if (!row || row.length < 2) continue;
 
-        const finV = getRaw(row, ['FINALIZADO']);
+        let empresa = '';
+        if (isInternal) {
+          empresa = colStr(row, 'empresa');
+        } else {
+          empresa = colStr(row, 'EMPRESA', 'empresa');
+        }
+        if (!empresa) continue;
+
+        const finV = getRaw(row, 'finalizado', 'FINALIZADO');
         const finStr = finV !== null ? finV.toString().toUpperCase() : '';
         const finalizado = finV === true || finStr === 'TRUE' || finStr === '1' || finStr === 'SIM' || finStr === 'X';
 
-        imported.push({
-          id: 'imp' + Date.now() + i,
-          finalizado,
-          createdAt: null,
-          // Texto puro
-          respComercial:   colStr(row, ['RESP COMERCIAL','RESPONSÁVEL COMERCIAL','RESP. COMERCIAL']),
-          respDoc:         colStr(row, ['RESP DOC','RESPONSÁVEL DOC','RESP. DOC']),
-          tipoContrato:    normTipo(colStr(row, ['TIPO CONTRATO','TIPO DE CONTRATO'])),
-          empresa,
-          fantasia:        colStr(row, ['NOME FANTASIA','FANTASIA']),
-          videoIntegracao: colStr(row, ['VIDEO INTEGRACAO','VÍDEO INTEGRAÇÃO','VIDEO','INTEGRAÇÃO']),
-          bairro:          colStr(row, ['BAIRRO']),
-          respVistoria:    colStr(row, ['NOME RESPONSÁVEL DA VISTORIA','RESP. VISTORIA','RESP VISTORIA']),
-          contatoVistoria: colStr(row, ['CONTATO DO RESPONS','VIISTORIA','VISTORIA']),
-          eventos:         colMixed(row, ['ENVIO EVENTOS','EVENTOS']),
-          // Só data
-          dataContrato:    colDate(row, ['DATA CONTRATO','DATA DO CONTRATO']),
-          dataVistoria:    colDate(row, ['DATA VISTORIA']),
-          dataReuniao:     colDate(row, ['DATA REUNIÃO','DATA REUNIAO','REUNIÃO DE ENTREGA']),
-          // MISTAS: data ou texto (OK, NAO TEM, FAZER, ANUAL, etc.)
-          pgtoSinal:       colMixed(row, ['PGTO DO SINAL','PGTO SINAL','PAGAMENTO SINAL']),
-          planilha:        colMixed(row, ['PLANILHA RECEBIDA','PLANILHA']),
-          procuracao:      colMixed(row, ['PROCURA','PROCURAÇÃO','PROCURACAO']),
-          soc:             colMixed(row, ['CADASTRO PLANILHA NO SOC','CADASTRO PLANILHA','SOC']),
-          checklist:       colMixed(row, ['CHECKLIST']),
-          nr1psico:        colMixed(row, ['NR 1 - PSICO','NR1 PSICO','NR1-PSICO']),
-          nr1rel:          colMixed(row, ['NR 1 - RELATÓRIO','NR 1 - RELATORIO','NR1 RELATÓRIO','NR1-REL','RELATÓRIO FINALIZADO']),
-          ghe:             colMixed(row, ['CADASTRO GHE','GHE E RISCOS','GHE']),
-          emissaoPdf:      colMixed(row, ['EMISSÃO PDF','EMISSAO PDF']),
-          pgto2:           colMixed(row, ['PGTO 2 PARCELA','PGTO 2','2 PARCELA']),
-          envioPdf:        colMixed(row, ['ENVIO PDF']),
-        });
+        const idV = colStr(row, 'id', 'ID');
+
+        if (isInternal) {
+          // Planilha exportada do sistema — usa nomes internos diretamente
+          imported.push({
+            id: idV || ('imp' + Date.now() + i),
+            finalizado,
+            createdAt: colStr(row, 'createdAt') || null,
+            respComercial:   colStr(row, 'respComercial'),
+            respDoc:         colStr(row, 'respDoc'),
+            dataContrato:    colDate(row, 'dataContrato'),
+            pgtoSinal:       colMixed(row, 'pgtoSinal'),
+            tipoContrato:    colStr(row, 'tipoContrato'),
+            tipoServico:     colStr(row, 'tipoServico'),
+            empresa,
+            fantasia:        colStr(row, 'fantasia'),
+            cnpj:            colStr(row, 'cnpj'),
+            videoIntegracao: colStr(row, 'videoIntegracao'),
+            dataVistoria:    colDate(row, 'dataVistoria'),
+            bairro:          colStr(row, 'bairro'),
+            respVistoria:    colStr(row, 'respVistoria'),
+            contatoVistoria: colStr(row, 'contatoVistoria'),
+            planilha:        colMixed(row, 'planilha'),
+            procuracao:      colMixed(row, 'procuracao'),
+            soc:             colMixed(row, 'soc'),
+            checklist:       colMixed(row, 'checklist'),
+            nr1psico:        colMixed(row, 'nr1psico'),
+            nr1rel:          colMixed(row, 'nr1rel'),
+            ghe:             colMixed(row, 'ghe'),
+            emissaoPdf:      colMixed(row, 'emissaoPdf'),
+            pgto2:           colMixed(row, 'pgto2'),
+            envioPdf:        colMixed(row, 'envioPdf'),
+            dataReuniao:     colDate(row, 'dataReuniao'),
+            eventos:         colMixed(row, 'eventos'),
+          });
+        } else {
+          // Planilha original em português
+          imported.push({
+            id: idV || ('imp' + Date.now() + i),
+            finalizado,
+            createdAt: null,
+            respComercial:   colStr(row, 'RESP COMERCIAL','RESPONSÁVEL COMERCIAL','RESP. COMERCIAL'),
+            respDoc:         colStr(row, 'RESP DOC','RESPONSÁVEL DOC','RESP. DOC'),
+            dataContrato:    colDate(row, 'DATA CONTRATO','DATA DO CONTRATO'),
+            pgtoSinal:       colMixed(row, 'PGTO DO SINAL','PGTO SINAL','PAGAMENTO SINAL'),
+            tipoContrato:    normTipo(colStr(row, 'TIPO CONTRATO','TIPO DE CONTRATO')),
+            tipoServico:     colStr(row, 'TIPO SERVIÇO','TIPO SERVICO','TIPO DE SERVIÇO'),
+            empresa,
+            fantasia:        colStr(row, 'NOME FANTASIA','FANTASIA'),
+            cnpj:            colStr(row, 'CNPJ'),
+            videoIntegracao: colStr(row, 'VIDEO INTEGRACAO','VÍDEO INTEGRAÇÃO','VIDEO','INTEGRAÇÃO'),
+            dataVistoria:    colDate(row, 'DATA VISTORIA'),
+            bairro:          colStr(row, 'BAIRRO'),
+            respVistoria:    colStr(row, 'NOME RESPONSÁVEL DA VISTORIA','RESP. VISTORIA','RESP VISTORIA'),
+            contatoVistoria: colStr(row, 'CONTATO DO RESPONS','VIISTORIA','VISTORIA'),
+            planilha:        colMixed(row, 'PLANILHA RECEBIDA','PLANILHA'),
+            procuracao:      colMixed(row, 'PROCURA','PROCURAÇÃO','PROCURACAO'),
+            soc:             colMixed(row, 'CADASTRO PLANILHA NO SOC','CADASTRO PLANILHA','SOC'),
+            checklist:       colMixed(row, 'CHECKLIST'),
+            nr1psico:        colMixed(row, 'NR 1 - PSICO','NR1 PSICO','NR1-PSICO'),
+            nr1rel:          colMixed(row, 'NR 1 - RELATÓRIO','NR 1 - RELATORIO','NR1 RELATÓRIO','NR1-REL','RELATÓRIO FINALIZADO'),
+            ghe:             colMixed(row, 'CADASTRO GHE','GHE E RISCOS','GHE'),
+            emissaoPdf:      colMixed(row, 'EMISSÃO PDF','EMISSAO PDF'),
+            pgto2:           colMixed(row, 'PGTO 2 PARCELA','PGTO 2','2 PARCELA'),
+            envioPdf:        colMixed(row, 'ENVIO PDF'),
+            dataReuniao:     colDate(row, 'DATA REUNIÃO','DATA REUNIAO','REUNIÃO DE ENTREGA'),
+            eventos:         colMixed(row, 'ENVIO EVENTOS','EVENTOS'),
+          });
+        }
       }
 
       if (imported.length === 0) { alert('Nenhuma empresa encontrada na planilha.'); return; }
@@ -1733,7 +1760,6 @@ function importarPlanilha(input) {
       saveLocal();
       renderTable();
       toast(`✅ ${imported.length} empresas importadas! Enviando para o banco...`);
-      // Envia imediatamente pro Google Sheets sem esperar o timer
       saveToSheets().then(() => {
         toast(`✅ ${imported.length} empresas salvas no banco de dados!`);
       });
