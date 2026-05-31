@@ -1051,40 +1051,59 @@ async function saveToSupa() {
   try {
     setSync('syncing', 'Salvando...');
 
-    // 1. Apaga TUDO de uma vez
-    const del = await fetch(
-      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?id=neq.XXXXXXX',
-      { method: 'DELETE', headers: supaHeaders() }
-    );
-    if (!del.ok) throw new Error('DELETE HTTP ' + del.status);
-
-    // 2. Insere em lotes de 100 — garante ID único em cada registro
-    const LOTE = 100;
+    // Garante ID único em cada registro
     const recordsComId = records.map((r, idx) => ({
       ...r,
       id: r.id || ('rec_' + Date.now() + '_' + idx)
     }));
+
+    // 1. Primeiro tenta inserir/atualizar com UPSERT (sem apagar nada)
+    //    Se o registro já existe pelo ID, atualiza. Se não existe, insere.
+    const LOTE = 100;
+    let totalSalvos = 0;
     for (let i = 0; i < recordsComId.length; i += LOTE) {
       const lote = recordsComId.slice(i, i + LOTE);
-      setSync('syncing', 'Salvando ' + (i+lote.length) + '/' + recordsComId.length + '...');
+      setSync('syncing', 'Salvando ' + Math.min(i+LOTE, recordsComId.length) + '/' + recordsComId.length + '...');
       const ins = await fetch(
         SUPA_URL + '/rest/v1/' + SUPA_TABLE,
         {
           method: 'POST',
-          headers: { ...supaHeaders(), 'Prefer': 'return=minimal' },
+          headers: { ...supaHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
           body: JSON.stringify(lote)
         }
       );
       if (!ins.ok) {
         const e = await ins.text();
-        throw new Error('INSERT lote ' + i + ' HTTP ' + ins.status + ': ' + e);
+        throw new Error('Lote ' + (i/LOTE+1) + ': ' + e);
+      }
+      totalSalvos += lote.length;
+    }
+
+    // 2. Só depois de salvar tudo com sucesso, apaga os IDs que não existem mais
+    //    (registros deletados pelo usuário)
+    const idsAtuais = recordsComId.map(r => r.id);
+    // Busca IDs que estão no Supabase mas não estão mais no sistema
+    const respIds = await fetch(
+      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?select=id',
+      { headers: supaHeaders() }
+    );
+    if (respIds.ok) {
+      const idsSupabase = (await respIds.json()).map(r => r.id);
+      const idsParaDeletar = idsSupabase.filter(id => !idsAtuais.includes(id));
+      if (idsParaDeletar.length > 0) {
+        await fetch(
+          SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?id=in.(' + idsParaDeletar.join(',') + ')',
+          { method: 'DELETE', headers: supaHeaders() }
+        );
       }
     }
 
-    setSync('', 'Salvo ✓ (' + records.length + ' registros)');
+    setSync('', 'Salvo ✓ (' + totalSalvos + ' registros)');
   } catch(e) {
     console.error('Supabase save:', e);
-    setSync('error', 'Erro ao salvar: ' + e.message);
+    setSync('error', 'Erro ao salvar — dados locais preservados');
+    // Dados locais continuam intactos
+    saveLocal();
   }
 }
 // ──────────────────────────────────────────────────────────────────────────────
