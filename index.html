@@ -46,6 +46,22 @@
   #sync-dot.syncing { background: #facc15; animation: pulse 0.8s infinite alternate; }
   #sync-dot.error { background: #f87171; }
   @keyframes pulse { from { opacity:1; } to { opacity:0.3; } }
+  /* Faixa de status de conexão com o banco — fixa no rodapé (não interfere no cabeçalho) */
+  #conn-banner {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 7000;
+    padding: 9px 16px; font-size: 13px; font-weight: 700; text-align: center;
+    display: none; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.18);
+  }
+  #conn-banner.ok  { display: flex; background: #dcfce7; color: #166534; border-top: 2px solid #16a34a; }
+  #conn-banner.err { display: flex; background: #fee2e2; color: #991b1b; border-top: 2px solid #dc2626; }
+  #conn-banner.syncing { display: flex; background: #fef9c3; color: #854d0e; border-top: 2px solid #ca8a04; }
+  #conn-banner .cb-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  #conn-banner.ok .cb-dot  { background: #16a34a; }
+  #conn-banner.err .cb-dot { background: #dc2626; animation: pulse 0.7s infinite alternate; }
+  #conn-banner.syncing .cb-dot { background: #ca8a04; animation: pulse 0.7s infinite alternate; }
+  /* a faixa "ok" some sozinha depois de alguns segundos */
+  #conn-banner.ok.fade { opacity: 0; transition: opacity 0.6s; pointer-events: none; }
 
   #config-banner {
     position: fixed; top: var(--header-h); left: 0; right: 0; z-index: 998;
@@ -488,6 +504,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
+<div id="conn-banner"><span class="cb-dot"></span><span id="conn-banner-txt"></span></div>
 
 <header>
   <div class="logo">
@@ -541,6 +558,9 @@
   </button>
   <button class="btn-cfg" onclick="openCarimbo()" style="color:#0e7490;border-color:#0e7490">🔖 Carimbar planilha</button>
   <button class="btn-cfg" onclick="openListaSuspensa()" style="color:#7c3aed;border-color:#7c3aed">📋 Lista suspensa</button>
+  <button class="btn-cfg" onclick="baixarBackupJson()" style="color:#15803d;border-color:#15803d">💾 Backup JSON</button>
+  <button class="btn-cfg" onclick="document.getElementById('restore-json-input').click()" style="color:#b45309;border-color:#b45309">♻️ Restaurar JSON</button>
+  <input type="file" id="restore-json-input" accept=".json" style="display:none" onchange="restaurarBackupJson(this)">
 
   <div class="toolbar-info" id="tbar-info"></div>
 </div>
@@ -913,9 +933,58 @@ function calcDiasContrato(r) {
 }
 
 // ─── SYNC ─────────────────────────────────────────────────────────────────────
+// Nome de quem está usando este PC (pedido uma vez, guardado no navegador)
+let USUARIO_NOME = localStorage.getItem('cronograma_usuario') || '';
+function getUsuarioNome() {
+  if (!USUARIO_NOME) {
+    let n = '';
+    try { n = (prompt('Digite seu nome (para identificar quem altera os dados):') || '').trim(); } catch(e) {}
+    USUARIO_NOME = n || 'Usuário';
+    localStorage.setItem('cronograma_usuario', USUARIO_NOME);
+  }
+  return USUARIO_NOME;
+}
+
+// Guarda os dados que ainda não foram confirmados no banco (para avisar)
+let pendenteEnvio = false;
+let bannerOkTimer = null;
+
+function atualizarBanner(estado) {
+  const b = document.getElementById('conn-banner');
+  const t = document.getElementById('conn-banner-txt');
+  if (!b || !t) return;
+  clearTimeout(bannerOkTimer);
+  const quem = USUARIO_NOME || localStorage.getItem('cronograma_usuario') || '';
+  if (estado === 'ok') {
+    b.className = 'ok';
+    t.textContent = '✓ Conectado ao banco — alterações salvas e compartilhadas';
+    // some sozinha após 4s para não cobrir a última linha
+    bannerOkTimer = setTimeout(() => {
+      b.classList.add('fade');
+      setTimeout(() => { if (b.classList.contains('ok')) b.className = ''; }, 600);
+    }, 4000);
+  } else if (estado === 'syncing') {
+    b.className = 'syncing';
+    t.textContent = '⟳ Sincronizando com o banco...';
+  } else if (estado === 'err') {
+    b.className = 'err';
+    t.textContent = '⚠️ SEM CONEXÃO COM O BANCO' +
+      (quem ? ' — as alterações de ' + quem + ' NÃO foram enviadas; outros PCs não vão vê-las' : ' — alterações não estão sendo compartilhadas') +
+      '. Faça um Backup JSON por segurança.';
+  } else {
+    b.className = '';
+  }
+}
+
 function setSync(state, msg) {
-  document.getElementById('sync-dot').className = state;
-  document.getElementById('sync-txt').textContent = msg;
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-txt');
+  if (dot) dot.className = state;
+  if (txt) txt.textContent = msg;
+  // Espelha o estado na faixa grande do rodapé
+  if (state === 'syncing') atualizarBanner('syncing');
+  else if (state === 'error') atualizarBanner('err');
+  else atualizarBanner('ok');
 }
 
 // Converte QUALQUER formato de data para YYYY-MM-DD
@@ -993,6 +1062,62 @@ function normalizarDatasRecord(r) {
   return r;
 }
 
+// ─── BACKUP / RESTAURAÇÃO JSON ────────────────────────────────────────────────
+function baixarBackupJson() {
+  try {
+    const dados = {
+      versao: 1,
+      exportadoEm: new Date().toISOString(),
+      total: records.length,
+      records: records
+    };
+    const blob = new Blob([JSON.stringify(dados, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dt = new Date();
+    const nome = 'backup_cronograma_' +
+      dt.getFullYear() + String(dt.getMonth()+1).padStart(2,'0') + String(dt.getDate()).padStart(2,'0') +
+      '_' + String(dt.getHours()).padStart(2,'0') + String(dt.getMinutes()).padStart(2,'0') + '.json';
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('💾 Backup salvo: ' + records.length + ' empresas');
+  } catch(e) {
+    alert('Erro ao gerar backup: ' + e.message);
+  }
+}
+
+function restaurarBackupJson(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const dados = JSON.parse(e.target.result);
+      const lista = Array.isArray(dados) ? dados : dados.records;
+      if (!Array.isArray(lista) || lista.length === 0) {
+        alert('Arquivo de backup inválido ou vazio.');
+        return;
+      }
+      if (!confirm('Restaurar ' + lista.length + ' empresas do backup?\n\nIsso vai SUBSTITUIR os dados atuais (e enviar para o banco).')) {
+        input.value = '';
+        return;
+      }
+      // Garante id em cada registro restaurado
+      records = lista.map(r => { if (!r.id) r.id = uid(); return normalizarDatasRecord(r); });
+      saveLocal();
+      renderTable();
+      toast('♻️ ' + records.length + ' empresas restauradas! Enviando ao banco...');
+      saveToSheets().then(() => toast('✅ Backup restaurado e salvo no banco!'));
+    } catch(err) {
+      alert('Erro ao ler backup: ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SUPA_URL   = 'https://oylmpxcxwgvhzgtrrkhj.supabase.co';
 const SUPA_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95bG1weGN4d2d2aHpndHJya2hqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MDgxMTAsImV4cCI6MjA5NTQ4NDExMH0.9YMmP_0Rm6qge5nW1KiSj7-I2pFmIBfr4_qpi1Zg0Us';
@@ -1029,6 +1154,17 @@ async function loadFromSupa(tentativa) {
       throw new Error('HTTP ' + resp.status + ': ' + err);
     }
     const data = await resp.json();
+
+    // PROTEÇÃO: se o banco voltar VAZIO mas existe backup local com dados,
+    // não sobrescreve — mantém o local e avisa. Evita "sumiço" por glitch.
+    const bkLocal = lerBackupLocal();
+    if ((!data || data.length === 0) && bkLocal && bkLocal.length > 0) {
+      records = bkLocal.map(normalizarDatasRecord);
+      setSync('error', 'Banco vazio — mantendo dados locais');
+      renderTable();
+      return false;
+    }
+
     records = data.map(normalizarDatasRecord);
     saveLocal();
     setSync('', 'Supabase ✓');
@@ -1047,24 +1183,50 @@ async function loadFromSupa(tentativa) {
   }
 }
 
+// Colunas base que existem na tabela do Supabase
+const SUPA_COLS_BASE = ['id','finalizado','createdAt','respComercial','respDoc',
+  'dataContrato','pgtoSinal','tipoContrato','tipoServico','empresa','fantasia',
+  'cnpj','videoIntegracao','dataVistoria','bairro','respVistoria','contatoVistoria',
+  'planilha','procuracao','soc','checklist','nr1psico','nr1rel','ghe','emissaoPdf',
+  'pgto2','envioPdf','dataReuniao','eventos'];
+// Colunas opcionais (só existem se você rodar o SQL de quem-editou).
+// O sistema detecta sozinho se elas existem no banco.
+const SUPA_COLS_EXTRA = ['editadoPor','editadoEm'];
+// Começa tentando enviar as colunas de editor; se o banco não tiver, desliga sozinho.
+let supaTemColunasEditor = (localStorage.getItem('supa_tem_editor') !== '0');
+function supaCols() {
+  return supaTemColunasEditor ? SUPA_COLS_BASE.concat(SUPA_COLS_EXTRA) : SUPA_COLS_BASE;
+}
+
+// Monta o registro só com colunas válidas; datas vazias viram null
+function recordParaSupa(r) {
+  const o = {};
+  supaCols().forEach(c => {
+    let v = r[c];
+    if (v === undefined) v = (c === 'finalizado') ? false : '';
+    o[c] = v;
+  });
+  return o;
+}
+
 async function saveToSupa() {
   try {
     setSync('syncing', 'Salvando...');
 
-    // Garante ID único em cada registro
-    const recordsComId = records.map((r, idx) => ({
-      ...r,
-      id: r.id || ('rec_' + Date.now() + '_' + idx)
-    }));
+    // CRÍTICO: garante ID ESTÁVEL gravando de volta no próprio records.
+    // Sem isso, cada save gera id novo e o Supabase cria duplicatas.
+    records.forEach(r => { if (!r.id) r.id = uid(); });
+    saveLocal();
 
-    // 1. Primeiro tenta inserir/atualizar com UPSERT (sem apagar nada)
-    //    Se o registro já existe pelo ID, atualiza. Se não existe, insere.
+    let payload = records.map(recordParaSupa);
+
+    // 1. UPSERT em lotes de 100 (nunca apaga antes de confirmar — regra de segurança)
     const LOTE = 100;
     let totalSalvos = 0;
-    for (let i = 0; i < recordsComId.length; i += LOTE) {
-      const lote = recordsComId.slice(i, i + LOTE);
-      setSync('syncing', 'Salvando ' + Math.min(i+LOTE, recordsComId.length) + '/' + recordsComId.length + '...');
-      const ins = await fetch(
+    for (let i = 0; i < payload.length; i += LOTE) {
+      const lote = payload.slice(i, i + LOTE);
+      setSync('syncing', 'Salvando ' + Math.min(i+LOTE, payload.length) + '/' + payload.length + '...');
+      let ins = await fetch(
         SUPA_URL + '/rest/v1/' + SUPA_TABLE,
         {
           method: 'POST',
@@ -1074,15 +1236,40 @@ async function saveToSupa() {
       );
       if (!ins.ok) {
         const e = await ins.text();
-        throw new Error('Lote ' + (i/LOTE+1) + ': ' + e);
+        // Se falhou por causa das colunas de editor (não existem no banco),
+        // desliga elas, refaz o payload sem elas e repete o lote.
+        if (supaTemColunasEditor && /editadoPor|editadoEm|does not exist|PGRST204|42703|column/i.test(e)) {
+          supaTemColunasEditor = false;
+          localStorage.setItem('supa_tem_editor', '0');
+          payload = records.map(recordParaSupa);
+          const lote2 = payload.slice(i, i + LOTE);
+          ins = await fetch(
+            SUPA_URL + '/rest/v1/' + SUPA_TABLE,
+            {
+              method: 'POST',
+              headers: { ...supaHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+              body: JSON.stringify(lote2)
+            }
+          );
+          if (!ins.ok) {
+            const e2 = await ins.text();
+            throw new Error('Lote ' + (i/LOTE+1) + ': HTTP ' + ins.status + ' — ' + e2);
+          }
+        } else {
+          throw new Error('Lote ' + (i/LOTE+1) + ': HTTP ' + ins.status + ' — ' + e);
+        }
       }
       totalSalvos += lote.length;
     }
 
-    // 2. Só depois de salvar tudo com sucesso, apaga os IDs que não existem mais
-    //    (registros deletados pelo usuário)
-    const idsAtuais = recordsComId.map(r => r.id);
-    // Busca IDs que estão no Supabase mas não estão mais no sistema
+    // 2. Só DEPOIS do upsert bem-sucedido, remove os IDs que o usuário apagou.
+    //    Proteção: nunca deleta se a lista local estiver vazia (evita apagar tudo
+    //    por engano após uma falha de carregamento).
+    const idsAtuais = records.map(r => r.id);
+    if (idsAtuais.length === 0) {
+      setSync('', 'Salvo ✓ (' + totalSalvos + ' registros)');
+      return;
+    }
     const respIds = await fetch(
       SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?select=id',
       { headers: supaHeaders() }
@@ -1090,9 +1277,11 @@ async function saveToSupa() {
     if (respIds.ok) {
       const idsSupabase = (await respIds.json()).map(r => r.id);
       const idsParaDeletar = idsSupabase.filter(id => !idsAtuais.includes(id));
-      if (idsParaDeletar.length > 0) {
+      // Deleta em lotes para não estourar a URL
+      for (let i = 0; i < idsParaDeletar.length; i += 50) {
+        const lote = idsParaDeletar.slice(i, i + 50);
         await fetch(
-          SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?id=in.(' + idsParaDeletar.join(',') + ')',
+          SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?id=in.(' + lote.map(encodeURIComponent).join(',') + ')',
           { method: 'DELETE', headers: supaHeaders() }
         );
       }
@@ -1102,7 +1291,6 @@ async function saveToSupa() {
   } catch(e) {
     console.error('Supabase save:', e);
     setSync('error', 'Erro ao salvar — dados locais preservados');
-    // Dados locais continuam intactos
     saveLocal();
   }
 }
@@ -1143,16 +1331,32 @@ async function saveToSheets() {
 }
 
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveToSheets, 1200); }
-function saveLocal() { localStorage.setItem('cronograma_bk', JSON.stringify(records)); }
-function loadLocal() {
+
+// Garante que a última alteração não se perca ao fechar a aba:
+// salva local na hora (síncrono) e dispara o envio ao banco.
+window.addEventListener('beforeunload', () => {
+  try { localStorage.setItem('cronograma_bk', JSON.stringify(records)); } catch(e) {}
+  if (saveTimer) { clearTimeout(saveTimer); }
+});
+function saveLocal() {
+  try { localStorage.setItem('cronograma_bk', JSON.stringify(records)); } catch(e) { console.error('saveLocal:', e); }
+}
+function lerBackupLocal() {
   try {
     const d = localStorage.getItem('cronograma_bk');
-    if (d) {
-      const saved = JSON.parse(d);
-      if (saved && saved.length >= records.length) records = saved.map(normalizarDatasRecord);
-    }
-  } catch(e) {}
-  setSync('', SCRIPT_URL ? 'Offline — dados locais' : 'Sem banco configurado');
+    if (!d) return null;
+    const arr = JSON.parse(d);
+    return Array.isArray(arr) ? arr : null;
+  } catch(e) { return null; }
+}
+function loadLocal() {
+  const saved = lerBackupLocal();
+  // Restaura o backup local sempre que existir e tiver dados.
+  // (Não exige ser maior que o atual — isso causava tela vazia.)
+  if (saved && saved.length > 0) {
+    records = saved.map(normalizarDatasRecord);
+  }
+  setSync('', SCRIPT_URL || supaAtivo() ? 'Offline — dados locais' : 'Sem banco configurado');
   renderTable();
 }
 
@@ -1510,6 +1714,9 @@ function txtHtml(idx, field, ph) {
 }
 function setField(idx, field, val) {
   records[idx][field] = val;
+  // registra quem alterou e quando (fica no backup local/JSON)
+  records[idx].editadoPor = getUsuarioNome();
+  records[idx].editadoEm = new Date().toISOString();
   updateStats();
   scheduleSave();
 }
@@ -1519,7 +1726,8 @@ function addRow() {
   records.push({
     id:uid(), finalizado:false,
     createdAt: new Date().toISOString(),
-    respComercial:'', respDoc:'', dataContrato:'', pgtoSinal:'', tipoContrato:'', tipoServico:'', tipoServico:'',
+    editadoPor: getUsuarioNome(), editadoEm: new Date().toISOString(),
+    respComercial:'', respDoc:'', dataContrato:'', pgtoSinal:'', tipoContrato:'', tipoServico:'',
     empresa:'', fantasia:'', cnpj:'', videoIntegracao:'', dataVistoria:'', bairro:'',
     respVistoria:'', contatoVistoria:'',
     planilha:'', procuracao:'', soc:'',
@@ -1613,7 +1821,7 @@ function renderTable() {
       <td class="td-date">${mixedHtml(idx,'envioPdf','Data ou OK/FAZER')}</td>
       <td class="td-date">${dateHtml(idx,'dataReuniao')}</td>
       <td class="td-evt">${customSelectHtml(idx,'eventos','Eventos')}</td>
-      <td class="td-del"><button class="btn-del" onclick="askDelete(${idx})" title="Remover empresa">✕</button></td>
+      <td class="td-del"><button class="btn-del" onclick="askDelete(${idx})" title="${records[idx].editadoPor ? 'Última alteração: ' + esc(records[idx].editadoPor) + (records[idx].editadoEm ? ' em ' + new Date(records[idx].editadoEm).toLocaleString('pt-BR') : '') : 'Remover empresa'}">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -2033,27 +2241,81 @@ function openCarimbo() {
 }
 function closeCarimbo() { document.getElementById('modal-carimbo').classList.remove('open'); }
 function processarCarimbo(input) {
-  const file=input.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=function(e){
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
     try {
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,raw:false});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:false});
-      // filtra linhas completamente vazias
-      const rowsFilled = rows.filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
-      if(rowsFilled.length<1){alert('Planilha sem dados!');return;}
-      // se só tem 1 linha, trata como dados sem cabeçalho
-      const finalRows = rowsFilled.length === 1 ? [['Coluna 1','Coluna 2'], ...rowsFilled] : rowsFilled;
-      carimboRowsExternos=finalRows;
-      const opts=finalRows[0].map((h,i)=>`<option value="${i}">${esc(String(h||'Col '+(i+1)))}</option>`).join('');
-      document.getElementById('carimbo-planilha-col-busca').innerHTML=opts;
-      document.getElementById('carimbo-planilha-col-valor').innerHTML=opts;
-      document.getElementById('carimbo-cfg').style.display='block';
-      document.getElementById('carimbo-matches').innerHTML=`<button onclick="buscarCoincidencias()" style="width:100%;background:#0e7490;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px">🔍 Buscar coincidências</button>`;
-    } catch(err){alert('Erro: '+err.message);}
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true, raw:false});
+      if (!wb.SheetNames.length) { alert('Planilha sem abas!'); return; }
+
+      window._carimboWb = wb;
+
+      // Monta seletor de abas se tiver mais de uma
+      const abaSelect = wb.SheetNames.length > 1
+        ? `<div style="margin-bottom:10px">
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:4px">Aba da planilha:</label>
+            <select id="carimbo-aba-sel" onchange="trocarAbaCarimbo(this.value)"
+              style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:13px;outline:none;background:#fff">
+              ${wb.SheetNames.map(n => `<option value="${n}">${n}</option>`).join('')}
+            </select>
+           </div>`
+        : '';
+
+      document.getElementById('carimbo-cfg').style.display = 'block';
+      document.getElementById('carimbo-cfg').innerHTML =
+        abaSelect +
+        `<label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px">Buscar coincidência por:</label>
+         <select id="carimbo-busca-col" style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:13px;outline:none;background:#fff;margin-bottom:10px">
+           <option value="cnpj">CNPJ</option>
+           <option value="empresa">Nome da Empresa</option>
+           <option value="fantasia">Nome Fantasia</option>
+         </select>
+         <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px">Coluna da planilha com o valor de busca:</label>
+         <select id="carimbo-planilha-col-busca" style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:13px;outline:none;background:#fff;margin-bottom:10px"></select>
+         <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px">Coluna destino no sistema (o que carimbar):</label>
+         <select id="carimbo-destino-col" style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:13px;outline:none;background:#fff;margin-bottom:10px">
+           <option value="cnpj">CNPJ</option><option value="fantasia">Nome Fantasia</option>
+           <option value="bairro">Bairro</option><option value="respComercial">Resp. Comercial</option>
+           <option value="respDoc">Resp. Doc</option><option value="tipoContrato">Tipo Contrato</option>
+           <option value="tipoServico">Tipo Serviço</option><option value="videoIntegracao">Vídeo Integração</option>
+           <option value="pgtoSinal">Pgto Sinal</option><option value="planilha">Planilha</option>
+           <option value="procuracao">Procuração</option><option value="soc">SOC</option>
+           <option value="checklist">Checklist</option><option value="nr1psico">NR1 Psico</option>
+           <option value="nr1rel">NR1 Relatório</option><option value="ghe">GHE</option>
+           <option value="emissaoPdf">Emissão PDF</option><option value="pgto2">Pgto 2ª</option>
+           <option value="envioPdf">Envio PDF</option><option value="eventos">Eventos</option>
+         </select>
+         <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px">Coluna da planilha com o valor a carimbar:</label>
+         <select id="carimbo-planilha-col-valor" style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:13px;outline:none;background:#fff;margin-bottom:10px"></select>`;
+
+      // Carrega a primeira aba
+      trocarAbaCarimbo(wb.SheetNames[0]);
+
+    } catch(err) { alert('Erro ao ler planilha: ' + err.message); console.error(err); }
   };
   reader.readAsArrayBuffer(file);
+}
+
+function trocarAbaCarimbo(sheetName) {
+  const wb = window._carimboWb;
+  if (!wb) return;
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', blankrows:false});
+  const rowsFilled = rows.filter(r => r.some(c => c !== null && c !== undefined && String(c).trim() !== ''));
+  if (!rowsFilled.length) { alert('Aba sem dados!'); return; }
+
+  carimboRowsExternos = rowsFilled;
+
+  // Monta opções com nomes reais das colunas
+  const hdrs = rowsFilled[0].map((h,i) => String(h || 'Coluna '+(i+1)).trim().replace(/\s+/g,' '));
+  const opts = hdrs.map((h,i) => `<option value="${i}">${h}</option>`).join('');
+
+  document.getElementById('carimbo-planilha-col-busca').innerHTML = opts;
+  document.getElementById('carimbo-planilha-col-valor').innerHTML = opts;
+  document.getElementById('carimbo-matches').innerHTML =
+    `<div style="font-size:12px;color:#6b7280;margin-bottom:8px">📋 <b>${sheetName}</b> · ${rowsFilled.length-1} linha(s) encontrada(s)</div>
+     <button onclick="buscarCoincidencias()" style="width:100%;background:#0e7490;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🔍 Buscar coincidências</button>`;
 }
 function buscarCoincidencias() {
   const campoBusca=document.getElementById('carimbo-busca-col').value;
@@ -2061,13 +2323,25 @@ function buscarCoincidencias() {
   const colV=parseInt(document.getElementById('carimbo-planilha-col-valor').value);
   const destino=document.getElementById('carimbo-destino-col').value;
   carimboDados=[];
+  // Normaliza string para comparação — remove acentos, espaços duplos, maiúsculas
+  function norm(s) {
+    return (s||'').toString().trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\s+/g,' ');
+  }
+
   carimboRowsExternos.slice(1).forEach(row=>{
     const bv=(row[colB]||'').toString().trim();
     const val=(row[colV]||'').toString().trim();
     if(!bv||!val) return;
     const mi=records.findIndex(r=>{
-      if(campoBusca==='cnpj') return r.cnpj && r.cnpj.replace(/\D/g,'')===bv.replace(/\D/g,'') && bv.replace(/\D/g,'').length>=14;
-      return (r[campoBusca]||'').toLowerCase().trim()===bv.toLowerCase();
+      if(campoBusca==='cnpj') {
+        const rv=(r.cnpj||'').replace(/\D/g,'');
+        const bvn=bv.replace(/\D/g,'');
+        return rv && bvn && rv===bvn;
+      }
+      // Busca flexível — ignora acentos, maiúsculas, espaços extras
+      return norm(r[campoBusca]) === norm(bv);
     });
     if(mi>=0) carimboDados.push({matchIdx:mi,destino,valorCarimbo:val,empresa:records[mi].empresa});
   });
@@ -2077,9 +2351,20 @@ function buscarCoincidencias() {
   document.getElementById('btn-aplicar-carimbo').style.display='block';
 }
 function aplicarCarimbo() {
-  carimboDados.forEach(c=>{ records[c.matchIdx][c.destino]=c.valorCarimbo; });
-  scheduleSave(); renderTable(); closeCarimbo();
-  toast(`✅ ${carimboDados.length} registro(s) carimbado(s)!`);
+  const quem = getUsuarioNome(), agora = new Date().toISOString();
+  carimboDados.forEach(c=>{
+    records[c.matchIdx][c.destino]=c.valorCarimbo;
+    records[c.matchIdx].editadoPor = quem;
+    records[c.matchIdx].editadoEm = agora;
+  });
+  saveLocal(); // salva local imediatamente
+  renderTable();
+  closeCarimbo();
+  toast('✅ ' + carimboDados.length + ' registro(s) carimbado(s)! Salvando no banco...');
+  // Força salvar no Supabase imediatamente sem delay
+  saveToSheets().then(() => {
+    toast('✅ Carimbos salvos no banco de dados!');
+  });
 }
 
 // ─── LISTA SUSPENSA ───────────────────────────────────────────────────────────
@@ -2117,23 +2402,31 @@ function salvarListaSuspensa() {
     document.getElementById('toolbar').style.top = 'calc(var(--header-h) + 44px)';
     document.getElementById('table-wrap').style.marginTop = 'calc(var(--header-h) + 44px + 46px)';
   }
-  // Aguarda 1s para garantir que a rede está pronta antes de conectar ao Supabase
+
+  // 1) Mostra IMEDIATAMENTE o backup local, pra nunca aparecer tela vazia
+  const bkInicial = lerBackupLocal();
+  if (bkInicial && bkInicial.length > 0) {
+    records = bkInicial.map(normalizarDatasRecord);
+    renderTable();
+  }
+
+  // 2) Depois sincroniza com o banco (se falhar, mantém o que já está na tela)
   setTimeout(() => {
     if (supaAtivo() || SCRIPT_URL) { loadFromSheets(); }
     else { loadLocal(); }
-  }, 1000);
+  }, 800);
   setTimeout(setupScrollSync, 100);
 
-  // Alerta automático de prazo ao iniciar
+  // Alerta automático de prazo ao iniciar (espera o load terminar)
   setTimeout(() => {
     const atrasadas = records.filter(r => !r.finalizado && calcDiasContrato(r) > 20);
     if (atrasadas.length > 0) {
       toast(`🚨 ${atrasadas.length} empresa(s) com prazo estourado! Verifique os alertas.`);
     }
-  }, 1500);
+  }, 4000);
 
   // Sirene de nova empresa
-  setTimeout(verificarNovas, 2000);
+  setTimeout(verificarNovas, 4500);
 })();
 </script>
 </body>
