@@ -1165,9 +1165,28 @@ async function loadFromSupa(tentativa) {
       return false;
     }
 
-    records = data.map(normalizarDatasRecord);
+    // MESCLA: o que veio do banco é a base, MAS qualquer registro que ainda
+    // está pendente de envio (ex: carimbo que não subiu) prevalece com a versão
+    // LOCAL — assim CNPJ carimbado offline não some quando o banco recarrega.
+    const pendentes = new Set(getPendentes());
+    let baseRemota = data.map(normalizarDatasRecord);
+    if (pendentes.size > 0 && bkLocal) {
+      const localPorId = {};
+      bkLocal.forEach(r => { if (r.id) localPorId[r.id] = r; });
+      const remotaPorId = {};
+      baseRemota.forEach(r => { if (r.id) remotaPorId[r.id] = true; });
+      // Sobrepõe os pendentes com a versão local
+      baseRemota = baseRemota.map(r => (r.id && pendentes.has(r.id) && localPorId[r.id])
+        ? normalizarDatasRecord(localPorId[r.id]) : r);
+      // Inclui pendentes que nem existem ainda no banco (registros novos locais)
+      pendentes.forEach(id => {
+        if (!remotaPorId[id] && localPorId[id]) baseRemota.push(normalizarDatasRecord(localPorId[id]));
+      });
+    }
+
+    records = baseRemota;
     saveLocal();
-    setSync('', 'Supabase ✓');
+    setSync('', pendentes.size > 0 ? 'Sincronizado (com ' + pendentes.size + ' pendente(s))' : 'Supabase ✓');
     renderTable();
     return true;
   } catch(e) {
@@ -1194,6 +1213,25 @@ const SUPA_COLS_BASE = ['id','finalizado','createdAt','respComercial','respDoc',
 const SUPA_COLS_EXTRA = ['editadoPor','editadoEm'];
 // Começa tentando enviar as colunas de editor; se o banco não tiver, desliga sozinho.
 let supaTemColunasEditor = (localStorage.getItem('supa_tem_editor') !== '0');
+
+// ── PENDÊNCIAS: ids de registros alterados que ainda NÃO confirmaram no banco ──
+// Enquanto um id estiver aqui, o load do banco NÃO sobrescreve esse registro local.
+function getPendentes() {
+  try { return JSON.parse(localStorage.getItem('cronograma_pendentes') || '[]'); }
+  catch(e) { return []; }
+}
+function setPendentes(arr) {
+  localStorage.setItem('cronograma_pendentes', JSON.stringify([...new Set(arr)]));
+}
+function marcarPendente(id) {
+  if (!id) return;
+  const p = getPendentes();
+  if (!p.includes(id)) { p.push(id); setPendentes(p); }
+}
+function limparPendentes(ids) {
+  const setRemover = new Set(ids);
+  setPendentes(getPendentes().filter(id => !setRemover.has(id)));
+}
 function supaCols() {
   return supaTemColunasEditor ? SUPA_COLS_BASE.concat(SUPA_COLS_EXTRA) : SUPA_COLS_BASE;
 }
@@ -1262,35 +1300,18 @@ async function saveToSupa() {
       totalSalvos += lote.length;
     }
 
-    // 2. Só DEPOIS do upsert bem-sucedido, remove os IDs que o usuário apagou.
-    //    Proteção: nunca deleta se a lista local estiver vazia (evita apagar tudo
-    //    por engano após uma falha de carregamento).
-    const idsAtuais = records.map(r => r.id);
-    if (idsAtuais.length === 0) {
-      setSync('', 'Salvo ✓ (' + totalSalvos + ' registros)');
-      return;
-    }
-    const respIds = await fetch(
-      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?select=id',
-      { headers: supaHeaders() }
-    );
-    if (respIds.ok) {
-      const idsSupabase = (await respIds.json()).map(r => r.id);
-      const idsParaDeletar = idsSupabase.filter(id => !idsAtuais.includes(id));
-      // Deleta em lotes para não estourar a URL
-      for (let i = 0; i < idsParaDeletar.length; i += 50) {
-        const lote = idsParaDeletar.slice(i, i + 50);
-        await fetch(
-          SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?id=in.(' + lote.map(encodeURIComponent).join(',') + ')',
-          { method: 'DELETE', headers: supaHeaders() }
-        );
-      }
-    }
+    // 2. NÃO fazemos varredura de delete aqui (era perigoso: se o records local
+    //    estivesse incompleto, apagava registros bons do banco — causava o
+    //    "sumiço no dia seguinte"). A remoção agora é feita SÓ quando o usuário
+    //    apaga uma empresa explicitamente, deletando aquele id na hora.
 
+    // Upsert OK → as pendências foram confirmadas no banco
+    limparPendentes(getPendentes());
     setSync('', 'Salvo ✓ (' + totalSalvos + ' registros)');
   } catch(e) {
     console.error('Supabase save:', e);
-    setSync('error', 'Erro ao salvar — dados locais preservados');
+    // NÃO limpa pendentes — ficam guardadas para o load não sobrescrever
+    setSync('error', 'Erro ao salvar — alterações guardadas localmente');
     saveLocal();
   }
 }
@@ -1717,6 +1738,8 @@ function setField(idx, field, val) {
   // registra quem alterou e quando (fica no backup local/JSON)
   records[idx].editadoPor = getUsuarioNome();
   records[idx].editadoEm = new Date().toISOString();
+  marcarPendente(records[idx].id);
+  saveLocal();
   updateStats();
   scheduleSave();
 }
@@ -1735,6 +1758,7 @@ function addRow() {
     emissaoPdf:'', pgto2:'', envioPdf:'', dataReuniao:'', eventos:''
   });
   renderTable();
+  marcarPendente(records[records.length-1].id);
   scheduleSave();
   setTimeout(() => {
     const rows = document.querySelectorAll('#tbody tr');
@@ -1843,11 +1867,20 @@ function askDelete(idx) {
 function closeConf() { document.getElementById('conf-modal').classList.remove('open'); deleteIdx = null; }
 function confirmDelete() {
   if (deleteIdx === null) return;
+  const removido = records[deleteIdx];
   records.splice(deleteIdx, 1);
   closeConf();
-  scheduleSave();
+  saveLocal();
   renderTable();
   toast('Empresa removida.');
+  // Apaga ESTE registro específico do banco (seguro — só o id removido)
+  if (removido && removido.id && supaAtivo()) {
+    fetch(
+      SUPA_URL + '/rest/v1/' + SUPA_TABLE + '?id=eq.' + encodeURIComponent(removido.id),
+      { method: 'DELETE', headers: supaHeaders() }
+    ).catch(e => console.error('delete supa:', e));
+  }
+  scheduleSave();
 }
 
 // ─── IMPORTAR PLANILHA ───────────────────────────────────────────────────────
@@ -2356,15 +2389,14 @@ function aplicarCarimbo() {
     records[c.matchIdx][c.destino]=c.valorCarimbo;
     records[c.matchIdx].editadoPor = quem;
     records[c.matchIdx].editadoEm = agora;
+    marcarPendente(records[c.matchIdx].id);
   });
-  saveLocal(); // salva local imediatamente
+  saveLocal(); // salva local imediatamente — não depende do banco
   renderTable();
   closeCarimbo();
   toast('✅ ' + carimboDados.length + ' registro(s) carimbado(s)! Salvando no banco...');
-  // Força salvar no Supabase imediatamente sem delay
-  saveToSheets().then(() => {
-    toast('✅ Carimbos salvos no banco de dados!');
-  });
+  // Tenta enviar ao banco; se falhar, fica pendente e não some
+  saveToSheets();
 }
 
 // ─── LISTA SUSPENSA ───────────────────────────────────────────────────────────
