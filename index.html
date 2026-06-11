@@ -1165,23 +1165,21 @@ async function loadFromSupa(tentativa) {
       return false;
     }
 
-    // MESCLA SEGURA campo a campo:
-    // - base é o que veio do banco
-    // - para cada registro, se o banco trouxe um campo VAZIO mas a versão local
-    //   tinha valor, mantém o valor local (um CNPJ nunca é apagado por um load).
-    // - registros pendentes prevalecem inteiros com a versão local.
-    // - registros que existem só no local (ainda não no banco) são incluídos.
+    // ── MESCLA MULTI-USUÁRIO (quem editou por último vence) ──────────────────
+    // Regras:
+    // 1. Registro PENDENTE neste PC (editado aqui e ainda não confirmado) → mantém local.
+    // 2. Senão, compara editadoEm local x banco: o MAIS RECENTE vence o registro inteiro.
+    //    Assim a edição da Maria numa linha existente aparece pro João ao recarregar.
+    // 3. Registro que só existe no local e está pendente entra; se sumiu do banco
+    //    e não é pendente, foi apagado de propósito noutro PC → não volta.
     const pendentes = new Set(getPendentes());
     const localPorId = {};
     (bkLocal || []).forEach(r => { if (r && r.id) localPorId[r.id] = r; });
 
-    const CAMPOS = ['finalizado','createdAt','respComercial','respDoc','dataContrato',
-      'pgtoSinal','tipoContrato','tipoServico','empresa','fantasia','cnpj','videoIntegracao',
-      'dataVistoria','bairro','respVistoria','contatoVistoria','planilha','procuracao','soc',
-      'checklist','nr1psico','nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao',
-      'eventos','editadoPor','editadoEm'];
-
-    function vazio(v){ return v === undefined || v === null || v === '' || v === false; }
+    function ts(r) {
+      const t = r && r.editadoEm ? Date.parse(r.editadoEm) : NaN;
+      return isNaN(t) ? 0 : t;
+    }
 
     let baseRemota = data.map(normalizarDatasRecord);
     const remotaPorId = {};
@@ -1189,19 +1187,17 @@ async function loadFromSupa(tentativa) {
 
     baseRemota = baseRemota.map(r => {
       const loc = r.id ? localPorId[r.id] : null;
-      if (!loc) return r;
-      // pendente → versão local inteira manda
-      if (r.id && pendentes.has(r.id)) return normalizarDatasRecord(loc);
-      // senão, preenche campo vazio do banco com o valor local (não apaga nada)
-      CAMPOS.forEach(c => {
-        if (vazio(r[c]) && !vazio(loc[c])) r[c] = loc[c];
-      });
-      return r;
+      if (!loc) return r;                                  // só no banco → usa banco
+      if (r.id && pendentes.has(r.id)) return normalizarDatasRecord(loc); // pendente → local
+      // quem tem timestamp mais novo vence o registro inteiro
+      return ts(loc) > ts(r) ? normalizarDatasRecord(loc) : r;
     });
 
-    // registros que só existem no local entram também
+    // registros locais que não estão no banco: só voltam se forem pendentes
     (bkLocal || []).forEach(loc => {
-      if (loc && loc.id && !remotaPorId[loc.id]) baseRemota.push(normalizarDatasRecord(loc));
+      if (loc && loc.id && !remotaPorId[loc.id] && pendentes.has(loc.id)) {
+        baseRemota.push(normalizarDatasRecord(loc));
+      }
     });
 
     records = baseRemota;
@@ -1763,8 +1759,8 @@ function txtHtml(idx, field, ph) {
   return `<input type="text" value="${esc(val)}" placeholder="${ph||''}" onchange="setField(${idx},'${field}',this.value)" onblur="setField(${idx},'${field}',this.value)">`;
 }
 function setField(idx, field, val) {
+  if (!records[idx].id) records[idx].id = uid();   // garante id estável
   records[idx][field] = val;
-  // registra quem alterou e quando (fica no backup local/JSON)
   records[idx].editadoPor = getUsuarioNome();
   records[idx].editadoEm = new Date().toISOString();
   marcarPendente(records[idx].id);
@@ -2412,20 +2408,71 @@ function buscarCoincidencias() {
   wrap.innerHTML=`<div style="font-size:12px;font-weight:700;margin-bottom:8px">✅ ${carimboDados.length} coincidência(s):</div>`+carimboDados.map(c=>`<div class="carimbo-match-item"><b>${esc(c.empresa||'—')}</b><span>→</span><span class="tag">${esc(c.valorCarimbo)}</span></div>`).join('');
   document.getElementById('btn-aplicar-carimbo').style.display='block';
 }
-function aplicarCarimbo() {
+async function aplicarCarimbo() {
   const quem = getUsuarioNome(), agora = new Date().toISOString();
+  const idsAfetados = [];
   carimboDados.forEach(c=>{
-    records[c.matchIdx][c.destino]=c.valorCarimbo;
-    records[c.matchIdx].editadoPor = quem;
-    records[c.matchIdx].editadoEm = agora;
-    marcarPendente(records[c.matchIdx].id);
+    const reg = records[c.matchIdx];
+    if (!reg.id) reg.id = uid();           // garante id
+    reg[c.destino] = c.valorCarimbo;
+    reg.editadoPor = quem;
+    reg.editadoEm = agora;
+    marcarPendente(reg.id);
+    idsAfetados.push(reg.id);
   });
-  saveLocal(); // salva local imediatamente — não depende do banco
+  saveLocal();                              // grava local na hora
   renderTable();
   closeCarimbo();
-  toast('✅ ' + carimboDados.length + ' registro(s) carimbado(s)! Salvando no banco...');
-  // Tenta enviar ao banco; se falhar, fica pendente e não some
-  saveToSheets();
+  toast('✅ ' + carimboDados.length + ' registro(s) carimbado(s)! Enviando ao banco...');
+
+  // Envia AGORA, direto, só os registros carimbados (upsert garantido)
+  await enviarRegistrosAoSupabase(idsAfetados);
+}
+
+// Envia ao Supabase, na hora, os registros cujos ids foram passados.
+// Faz UPSERT (insere ou atualiza) — não apaga nada.
+async function enviarRegistrosAoSupabase(ids) {
+  if (!supaAtivo()) { setSync('error', 'Sem banco — salvo localmente'); return; }
+  const alvo = records.filter(r => ids.includes(r.id)).map(recordParaSupa);
+  if (alvo.length === 0) { setSync('', 'Nada a enviar'); return; }
+  try {
+    setSync('syncing', 'Enviando ao banco...');
+    let resp = await fetch(
+      SUPA_URL + '/rest/v1/' + SUPA_TABLE,
+      {
+        method: 'POST',
+        headers: { ...supaHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(alvo)
+      }
+    );
+    if (!resp.ok) {
+      const e = await resp.text();
+      // se falhar por colunas de editor, desliga e tenta de novo sem elas
+      if (supaTemColunasEditor && /editadoPor|editadoEm|does not exist|PGRST204|42703|column/i.test(e)) {
+        supaTemColunasEditor = false;
+        localStorage.setItem('supa_tem_editor','0');
+        const alvo2 = records.filter(r => ids.includes(r.id)).map(recordParaSupa);
+        resp = await fetch(
+          SUPA_URL + '/rest/v1/' + SUPA_TABLE,
+          {
+            method: 'POST',
+            headers: { ...supaHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify(alvo2)
+          }
+        );
+        if (!resp.ok) { const e2 = await resp.text(); throw new Error('HTTP ' + resp.status + ' — ' + e2); }
+      } else {
+        throw new Error('HTTP ' + resp.status + ' — ' + e);
+      }
+    }
+    limparPendentes(ids);                   // confirmados no banco
+    setSync('', '✅ Salvo no banco (' + alvo.length + ')');
+    toast('✅ Carimbo salvo no banco de dados!');
+  } catch(err) {
+    console.error('Envio carimbo:', err);
+    setSync('error', 'Falha ao enviar — guardado localmente, tentará de novo');
+    toast('⚠️ Não enviou ao banco agora. Ficou salvo no seu PC e vai tentar de novo.');
+  }
 }
 
 // ─── LISTA SUSPENSA ───────────────────────────────────────────────────────────
@@ -2486,8 +2533,20 @@ function salvarListaSuspensa() {
     }
   }, 4000);
 
-  // Sirene de nova empresa
-  setTimeout(verificarNovas, 4500);
+  // Sirene de nova empresa ao iniciar — DESATIVADA a pedido do usuário
+  // setTimeout(verificarNovas, 4500);
+
+  // ATUALIZAÇÃO AUTOMÁTICA: a cada 30s busca o banco para ver alterações de
+  // outros PCs (ex: edição da Maria aparece pro João sem precisar recarregar).
+  // Só roda se não houver edição em foco para não atrapalhar quem está digitando.
+  setInterval(() => {
+    if (!supaAtivo()) return;
+    const editando = document.activeElement &&
+      ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName);
+    if (editando) return;               // não atualiza enquanto digita
+    if (document.querySelector('.modal-back.open, .carimbo-back.open, .lista-back.open')) return;
+    loadFromSupa();
+  }, 30000);
 })();
 </script>
 </body>
