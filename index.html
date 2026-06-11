@@ -1165,24 +1165,44 @@ async function loadFromSupa(tentativa) {
       return false;
     }
 
-    // MESCLA: o que veio do banco é a base, MAS qualquer registro que ainda
-    // está pendente de envio (ex: carimbo que não subiu) prevalece com a versão
-    // LOCAL — assim CNPJ carimbado offline não some quando o banco recarrega.
+    // MESCLA SEGURA campo a campo:
+    // - base é o que veio do banco
+    // - para cada registro, se o banco trouxe um campo VAZIO mas a versão local
+    //   tinha valor, mantém o valor local (um CNPJ nunca é apagado por um load).
+    // - registros pendentes prevalecem inteiros com a versão local.
+    // - registros que existem só no local (ainda não no banco) são incluídos.
     const pendentes = new Set(getPendentes());
+    const localPorId = {};
+    (bkLocal || []).forEach(r => { if (r && r.id) localPorId[r.id] = r; });
+
+    const CAMPOS = ['finalizado','createdAt','respComercial','respDoc','dataContrato',
+      'pgtoSinal','tipoContrato','tipoServico','empresa','fantasia','cnpj','videoIntegracao',
+      'dataVistoria','bairro','respVistoria','contatoVistoria','planilha','procuracao','soc',
+      'checklist','nr1psico','nr1rel','ghe','emissaoPdf','pgto2','envioPdf','dataReuniao',
+      'eventos','editadoPor','editadoEm'];
+
+    function vazio(v){ return v === undefined || v === null || v === '' || v === false; }
+
     let baseRemota = data.map(normalizarDatasRecord);
-    if (pendentes.size > 0 && bkLocal) {
-      const localPorId = {};
-      bkLocal.forEach(r => { if (r.id) localPorId[r.id] = r; });
-      const remotaPorId = {};
-      baseRemota.forEach(r => { if (r.id) remotaPorId[r.id] = true; });
-      // Sobrepõe os pendentes com a versão local
-      baseRemota = baseRemota.map(r => (r.id && pendentes.has(r.id) && localPorId[r.id])
-        ? normalizarDatasRecord(localPorId[r.id]) : r);
-      // Inclui pendentes que nem existem ainda no banco (registros novos locais)
-      pendentes.forEach(id => {
-        if (!remotaPorId[id] && localPorId[id]) baseRemota.push(normalizarDatasRecord(localPorId[id]));
+    const remotaPorId = {};
+    baseRemota.forEach(r => { if (r.id) remotaPorId[r.id] = true; });
+
+    baseRemota = baseRemota.map(r => {
+      const loc = r.id ? localPorId[r.id] : null;
+      if (!loc) return r;
+      // pendente → versão local inteira manda
+      if (r.id && pendentes.has(r.id)) return normalizarDatasRecord(loc);
+      // senão, preenche campo vazio do banco com o valor local (não apaga nada)
+      CAMPOS.forEach(c => {
+        if (vazio(r[c]) && !vazio(loc[c])) r[c] = loc[c];
       });
-    }
+      return r;
+    });
+
+    // registros que só existem no local entram também
+    (bkLocal || []).forEach(loc => {
+      if (loc && loc.id && !remotaPorId[loc.id]) baseRemota.push(normalizarDatasRecord(loc));
+    });
 
     records = baseRemota;
     saveLocal();
@@ -1252,13 +1272,24 @@ async function saveToSupa() {
     setSync('syncing', 'Salvando...');
 
     // CRÍTICO: garante ID ESTÁVEL gravando de volta no próprio records.
-    // Sem isso, cada save gera id novo e o Supabase cria duplicatas.
     records.forEach(r => { if (!r.id) r.id = uid(); });
     saveLocal();
 
-    let payload = records.map(recordParaSupa);
+    // ENVIA SÓ O QUE ESTE PC ALTEROU (pendentes). Nunca a planilha inteira —
+    // assim este PC não sobrescreve nem atrasa o que a Maria/vizinho gravaram.
+    // Na primeira sincronização (sem pendentes registrados ainda) envia tudo
+    // uma vez para popular o banco.
+    const pend = new Set(getPendentes());
+    let aEnviar;
+    if (pend.size > 0) {
+      aEnviar = records.filter(r => pend.has(r.id));
+    } else {
+      aEnviar = records; // popular banco na primeira vez
+    }
 
-    // 1. UPSERT em lotes de 100 (nunca apaga antes de confirmar — regra de segurança)
+    let payload = aEnviar.map(recordParaSupa);
+
+    // 1. UPSERT em lotes de 100 (só insere/atualiza — NUNCA apaga)
     const LOTE = 100;
     let totalSalvos = 0;
     for (let i = 0; i < payload.length; i += LOTE) {
@@ -1274,12 +1305,10 @@ async function saveToSupa() {
       );
       if (!ins.ok) {
         const e = await ins.text();
-        // Se falhou por causa das colunas de editor (não existem no banco),
-        // desliga elas, refaz o payload sem elas e repete o lote.
         if (supaTemColunasEditor && /editadoPor|editadoEm|does not exist|PGRST204|42703|column/i.test(e)) {
           supaTemColunasEditor = false;
           localStorage.setItem('supa_tem_editor', '0');
-          payload = records.map(recordParaSupa);
+          payload = aEnviar.map(recordParaSupa);
           const lote2 = payload.slice(i, i + LOTE);
           ins = await fetch(
             SUPA_URL + '/rest/v1/' + SUPA_TABLE,
