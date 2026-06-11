@@ -556,6 +556,7 @@
     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     Configurar banco
   </button>
+  <button class="btn-cfg" onclick="atualizarAgora()" style="color:#0369a1;border-color:#0369a1;font-weight:700">🔄 Atualizar</button>
   <button class="btn-cfg" onclick="openCarimbo()" style="color:#0e7490;border-color:#0e7490">🔖 Carimbar planilha</button>
   <button class="btn-cfg" onclick="openListaSuspensa()" style="color:#7c3aed;border-color:#7c3aed">📋 Lista suspensa</button>
   <button class="btn-cfg" onclick="baixarBackupJson()" style="color:#15803d;border-color:#15803d">💾 Backup JSON</button>
@@ -1063,6 +1064,17 @@ function normalizarDatasRecord(r) {
 }
 
 // ─── BACKUP / RESTAURAÇÃO JSON ────────────────────────────────────────────────
+// Botão "Atualizar": busca AGORA os dados do banco, ignorando pendências presas.
+async function atualizarAgora() {
+  if (!supaAtivo()) { toast('Sem conexão com o banco.'); return; }
+  toast('🔄 Buscando alterações do banco...');
+  // limpa pendências presas para o banco mandar de verdade
+  setPendentesMap({});
+  const ok = await loadFromSupa();
+  if (ok) toast('✅ Atualizado com os dados do banco!');
+  else toast('⚠️ Não foi possível atualizar agora.');
+}
+
 function baixarBackupJson() {
   try {
     const dados = {
@@ -1165,32 +1177,25 @@ async function loadFromSupa(tentativa) {
       return false;
     }
 
-    // ── MESCLA MULTI-USUÁRIO (quem editou por último vence) ──────────────────
-    // Regras:
-    // 1. Registro PENDENTE neste PC (editado aqui e ainda não confirmado) → mantém local.
-    // 2. Senão, compara editadoEm local x banco: o MAIS RECENTE vence o registro inteiro.
-    //    Assim a edição da Maria numa linha existente aparece pro João ao recarregar.
-    // 3. Registro que só existe no local e está pendente entra; se sumiu do banco
-    //    e não é pendente, foi apagado de propósito noutro PC → não volta.
+    // ── MESCLA MULTI-USUÁRIO (simples e robusta) ─────────────────────────────
+    // O BANCO é a verdade. A única exceção é um registro que ESTE PC alterou e
+    // ainda NÃO conseguiu enviar (pendente) — esse mantém a versão local até subir.
+    // Resultado: o que o João salvou aparece pra Maria; o que a Maria acabou de
+    // digitar e ainda não subiu não se perde.
     const pendentes = new Set(getPendentes());
     const localPorId = {};
     (bkLocal || []).forEach(r => { if (r && r.id) localPorId[r.id] = r; });
-
-    function ts(r) {
-      const t = r && r.editadoEm ? Date.parse(r.editadoEm) : NaN;
-      return isNaN(t) ? 0 : t;
-    }
 
     let baseRemota = data.map(normalizarDatasRecord);
     const remotaPorId = {};
     baseRemota.forEach(r => { if (r.id) remotaPorId[r.id] = true; });
 
     baseRemota = baseRemota.map(r => {
-      const loc = r.id ? localPorId[r.id] : null;
-      if (!loc) return r;                                  // só no banco → usa banco
-      if (r.id && pendentes.has(r.id)) return normalizarDatasRecord(loc); // pendente → local
-      // quem tem timestamp mais novo vence o registro inteiro
-      return ts(loc) > ts(r) ? normalizarDatasRecord(loc) : r;
+      // se este PC tem alteração pendente nesse registro, mantém a local até enviar
+      if (r.id && pendentes.has(r.id) && localPorId[r.id]) {
+        return normalizarDatasRecord(localPorId[r.id]);
+      }
+      return r; // senão, usa a versão do banco (mostra o que os outros salvaram)
     });
 
     // registros locais que não estão no banco: só voltam se forem pendentes
@@ -1230,23 +1235,40 @@ const SUPA_COLS_EXTRA = ['editadoPor','editadoEm'];
 // Começa tentando enviar as colunas de editor; se o banco não tiver, desliga sozinho.
 let supaTemColunasEditor = (localStorage.getItem('supa_tem_editor') !== '0');
 
-// ── PENDÊNCIAS: ids de registros alterados que ainda NÃO confirmaram no banco ──
-// Enquanto um id estiver aqui, o load do banco NÃO sobrescreve esse registro local.
-function getPendentes() {
-  try { return JSON.parse(localStorage.getItem('cronograma_pendentes') || '[]'); }
-  catch(e) { return []; }
+// ── PENDÊNCIAS: ids alterados neste PC que ainda NÃO confirmaram no banco ──
+// Agora com horário: uma pendência vale por pouco tempo. Se expirar, o banco
+// volta a mandar (evita registro preso mostrando versão velha pra sempre).
+const PENDENTE_VALIDADE_MS = 60 * 1000; // 60 segundos
+function getPendentesMap() {
+  try {
+    const v = JSON.parse(localStorage.getItem('cronograma_pendentes') || '{}');
+    // compatibilidade: se era array antigo, converte
+    if (Array.isArray(v)) { const m={}; v.forEach(id=>m[id]=Date.now()); return m; }
+    return v || {};
+  } catch(e) { return {}; }
 }
-function setPendentes(arr) {
-  localStorage.setItem('cronograma_pendentes', JSON.stringify([...new Set(arr)]));
+function setPendentesMap(m) {
+  localStorage.setItem('cronograma_pendentes', JSON.stringify(m || {}));
+}
+// retorna só os ids cuja pendência ainda é válida (não expirou)
+function getPendentes() {
+  const m = getPendentesMap();
+  const agora = Date.now();
+  return Object.keys(m).filter(id => (agora - (m[id]||0)) < PENDENTE_VALIDADE_MS);
+}
+function setPendentes(arr) { // mantido por compatibilidade
+  const m = {}; (arr||[]).forEach(id => m[id] = Date.now()); setPendentesMap(m);
 }
 function marcarPendente(id) {
   if (!id) return;
-  const p = getPendentes();
-  if (!p.includes(id)) { p.push(id); setPendentes(p); }
+  const m = getPendentesMap();
+  m[id] = Date.now();
+  setPendentesMap(m);
 }
 function limparPendentes(ids) {
-  const setRemover = new Set(ids);
-  setPendentes(getPendentes().filter(id => !setRemover.has(id)));
+  const m = getPendentesMap();
+  (ids||[]).forEach(id => delete m[id]);
+  setPendentesMap(m);
 }
 function supaCols() {
   return supaTemColunasEditor ? SUPA_COLS_BASE.concat(SUPA_COLS_EXTRA) : SUPA_COLS_BASE;
@@ -2536,17 +2558,17 @@ function salvarListaSuspensa() {
   // Sirene de nova empresa ao iniciar — DESATIVADA a pedido do usuário
   // setTimeout(verificarNovas, 4500);
 
-  // ATUALIZAÇÃO AUTOMÁTICA: a cada 30s busca o banco para ver alterações de
-  // outros PCs (ex: edição da Maria aparece pro João sem precisar recarregar).
-  // Só roda se não houver edição em foco para não atrapalhar quem está digitando.
+  // ATUALIZAÇÃO AUTOMÁTICA: a cada 15s busca o banco para ver alterações de
+  // outros PCs (a edição do João aparece pra Maria sozinha, sem apertar nada).
+  // Não roda enquanto a pessoa está digitando ou com um modal aberto.
   setInterval(() => {
     if (!supaAtivo()) return;
     const editando = document.activeElement &&
       ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName);
-    if (editando) return;               // não atualiza enquanto digita
+    if (editando) return;               // não atrapalha quem está digitando
     if (document.querySelector('.modal-back.open, .carimbo-back.open, .lista-back.open')) return;
-    loadFromSupa();
-  }, 30000);
+    loadFromSupa();                     // pendências expiradas já não travam o banco
+  }, 15000);
 })();
 </script>
 </body>
