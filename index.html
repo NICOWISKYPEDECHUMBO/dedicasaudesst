@@ -1803,6 +1803,64 @@ function setField(idx, field, val) {
 }
 
 // ─── ADD ROW ──────────────────────────────────────────────────────────────────
+// Verifica se TODOS os campos da linha estão preenchidos.
+// Retorna lista de campos que faltam (vazia = tudo preenchido).
+function camposFaltando(r) {
+  const obrigatorios = [
+    ['respComercial','Resp. Comercial'],
+    ['respDoc','Resp. Doc'],
+    ['dataContrato','Data Contrato'],
+    ['pgtoSinal','Pgto do Sinal'],
+    ['tipoContrato','Tipo Contrato'],
+    ['tipoServico','Tipo Serviço'],
+    ['empresa','Empresa'],
+    ['fantasia','Nome Fantasia'],
+    ['cnpj','CNPJ'],
+    ['videoIntegracao','Vídeo Integração'],
+    ['dataVistoria','Data Vistoria'],
+    ['bairro','Bairro'],
+    ['respVistoria','Resp. Vistoria'],
+    ['contatoVistoria','Contato da Vistoria'],
+    ['planilha','Planilha Recebida'],
+    ['procuracao','Procuração'],
+    ['soc','Cadastro no SOC'],
+    ['checklist','Checklist'],
+    ['nr1psico','NR1 Psico'],
+    ['nr1rel','NR1 Relatório'],
+    ['ghe','Cadastro GHE e Riscos'],
+    ['emissaoPdf','Emissão PDF'],
+    ['pgto2','Pgto 2 Parcela'],
+    ['envioPdf','Envio PDF'],
+    ['dataReuniao','Data Reunião de Entrega'],
+    ['eventos','Envio Eventos']
+  ];
+  const faltam = [];
+  obrigatorios.forEach(([campo, label]) => {
+    const v = r[campo];
+    if (v === undefined || v === null || String(v).trim() === '') faltam.push(label);
+  });
+  return faltam;
+}
+
+// Tenta marcar "Finalizado". Só deixa se a linha estiver 100% preenchida.
+function tentarFinalizar(idx, marcado, checkboxEl) {
+  if (!marcado) {
+    // desmarcar é sempre permitido
+    setField(idx, 'finalizado', false);
+    checkboxEl.closest('tr').classList.remove('is-fin');
+    return;
+  }
+  const faltam = camposFaltando(records[idx]);
+  if (faltam.length > 0) {
+    checkboxEl.checked = false; // reverte o clique
+    alert('⚠️ Não é possível finalizar esta empresa.\n\nPreencha antes os campos:\n\n• ' +
+      faltam.join('\n• '));
+    return;
+  }
+  setField(idx, 'finalizado', true);
+  checkboxEl.closest('tr').classList.add('is-fin');
+}
+
 function addRow() {
   records.push({
     id:uid(), finalizado:false,
@@ -1866,8 +1924,8 @@ function renderTable() {
 
     return `<tr class="${rowCls}">
       <td class="td-fin">
-        <input type="checkbox" ${r.finalizado?'checked':''} title="Finalizado"
-          onchange="setField(${idx},'finalizado',this.checked);this.closest('tr').classList.toggle('is-fin',this.checked)">
+        <input type="checkbox" ${r.finalizado?'checked':''} title="Finalizado (só marca com a linha toda preenchida)"
+          onchange="tentarFinalizar(${idx},this.checked,this)">
       </td>
       <td class="td-txt">${customSelectHtml(idx,'respComercial','Resp. Comercial')}</td>
       <td class="td-txt">${customSelectHtml(idx,'respDoc','Resp. Doc.')}</td>
