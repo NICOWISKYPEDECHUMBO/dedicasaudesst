@@ -128,11 +128,13 @@
   /* MODAL RELATÓRIO */
   .rel-back { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 7000; display: none; align-items: center; justify-content: center; }
   .rel-back.open { display: flex; }
-  .rel-box { background: #fff; border-radius: 14px; padding: 24px 28px 20px; width: 98vw; max-width: 1400px; height: 92vh; display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
-  .rel-box h3 { font-size: 18px; margin-bottom: 4px; color: #1e40af; flex-shrink:0; }
-  .rel-box .sub { font-size: 12px; color: var(--texto-muted); margin-bottom: 12px; flex-shrink:0; }
-  .rel-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; flex-shrink:0; }
-  .rel-btn { background: var(--cinza-light); border: 1.5px solid var(--cinza-borda); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-weight: 600; color: var(--texto); transition: all 0.15s; }
+  .rel-box { background: #fff; border-radius: 14px; padding: 16px 22px 14px; width: 98vw; max-width: 1400px; height: 95vh; display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.3); }
+  .rel-box h3 { font-size: 17px; margin-bottom: 2px; color: #1e40af; flex-shrink:0; }
+  .rel-box .sub { font-size: 11px; color: var(--texto-muted); margin-bottom: 8px; flex-shrink:0; }
+  .rel-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; flex-shrink:0; max-height: 132px; overflow-y: auto; padding: 2px; }
+  .rel-filters::-webkit-scrollbar { width: 8px; }
+  .rel-filters::-webkit-scrollbar-thumb { background: #c0c4cc; border-radius: 4px; }
+  .rel-btn { background: var(--cinza-light); border: 1.5px solid var(--cinza-borda); border-radius: 7px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-weight: 600; color: var(--texto); transition: all 0.15s; white-space: nowrap; }
   .rel-btn:hover { border-color: #1e40af; color: #1e40af; }
   .rel-btn.active { background: #1e40af; color: #fff; border-color: #1e40af; }
   /* rel-wrap = container principal com scroll X e Y */
@@ -502,6 +504,18 @@
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+  // Guarda a versão original (usada por importação e carimbo — não pode mudar).
+  window.XLSX_ORIGINAL = window.XLSX;
+</script>
+<!-- Versão com suporte a cores, só para a EXPORTAÇÃO do relatório. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script>
+  // xlsx-js-style assume o XLSX global (com cores). Guarda à parte e
+  // restaura o ORIGINAL para o XLSX global, mantendo o resto do sistema intacto.
+  window.XLSX_STYLE = window.XLSX;
+  window.XLSX = window.XLSX_ORIGINAL;
+</script>
 </head>
 <body>
 <div id="conn-banner"><span class="cb-dot"></span><span id="conn-banner-txt"></span></div>
@@ -915,19 +929,37 @@ const OPTS_PGTO    = ['','OK','NAO INFORMADO','ANUAL','PENDENTE'];
 const OPTS_TIPO    = ['','NAO INFORMADO','Mensal','Anual','Semestral','Avulso','Atualização','AEP','AEP E AET','Outro'];
 
 // Configuração das pendências para relatório
+// helper: campo vazio (cobre undefined, null, string vazia e só espaços)
+function _vazio(v) { return v === undefined || v === null || String(v).trim() === ''; }
+
 const PENDENCIAS = [
-  { id: 'sem-vistoria',   label: '📅 Sem data de vistoria',      check: r => !r.dataVistoria },
-  { id: 'sem-planilha',   label: '📋 Sem planilha recebida',      check: r => !r.planilha || r.planilha === '' },
-  { id: 'sem-procuracao', label: '📄 Sem procuração',             check: r => !r.procuracao || r.procuracao === '' },
-  { id: 'sem-soc',        label: '💻 Sem cadastro SOC',           check: r => !r.soc || r.soc === '' },
-  { id: 'sem-checklist',  label: '✅ Sem checklist',              check: r => !r.checklist || r.checklist === '' },
-  { id: 'sem-nr1psico',   label: '🧠 Sem NR1 Psico',             check: r => !r.nr1psico || r.nr1psico === '' },
-  { id: 'sem-nr1rel',     label: '📝 Sem NR1 Relatório',         check: r => !r.nr1rel || r.nr1rel === '' },
-  { id: 'sem-ghe',        label: '⚙️ Sem cadastro GHE',          check: r => !r.ghe || r.ghe === '' },
-  { id: 'sem-pdf',        label: '📑 Sem emissão PDF',            check: r => !r.emissaoPdf || r.emissaoPdf === '' },
-  { id: 'sem-envio',      label: '📨 Sem envio PDF',              check: r => !r.envioPdf || r.envioPdf === '' },
-  { id: 'sem-pgto2',      label: '💰 Sem 2ª parcela',            check: r => !r.pgto2 || r.pgto2 === '' },
-  { id: 'atrasadas',      label: '🚨 Atrasadas (+20 dias)',       check: r => calcDiasContrato(r) > 20 },
+  { id: 'sem-respComercial',  label: '🧑‍💼 Sem Resp. Comercial',       check: r => _vazio(r.respComercial) },
+  { id: 'sem-respDoc',        label: '🧑‍💻 Sem Resp. Doc',             check: r => _vazio(r.respDoc) },
+  { id: 'sem-dataContrato',   label: '📆 Sem Data Contrato',           check: r => _vazio(r.dataContrato) },
+  { id: 'sem-pgtoSinal',      label: '💵 Sem Pgto do Sinal',           check: r => _vazio(r.pgtoSinal) },
+  { id: 'sem-tipoContrato',   label: '📁 Sem Tipo Contrato',           check: r => _vazio(r.tipoContrato) },
+  { id: 'sem-tipoServico',    label: '🛠️ Sem Tipo Serviço',           check: r => _vazio(r.tipoServico) },
+  { id: 'sem-empresa',        label: '🏢 Sem Empresa',                 check: r => _vazio(r.empresa) },
+  { id: 'sem-fantasia',       label: '🏷️ Sem Nome Fantasia',          check: r => _vazio(r.fantasia) },
+  { id: 'sem-cnpj',           label: '🔢 Sem CNPJ',                    check: r => _vazio(r.cnpj) },
+  { id: 'sem-videoIntegracao',label: '🎬 Sem Vídeo Integração',        check: r => _vazio(r.videoIntegracao) },
+  { id: 'sem-vistoria',       label: '📅 Sem Data Vistoria',           check: r => _vazio(r.dataVistoria) },
+  { id: 'sem-bairro',         label: '📍 Sem Bairro',                  check: r => _vazio(r.bairro) },
+  { id: 'sem-respVistoria',   label: '👷 Sem Resp. Vistoria',          check: r => _vazio(r.respVistoria) },
+  { id: 'sem-contatoVistoria',label: '📞 Sem Contato da Vistoria',     check: r => _vazio(r.contatoVistoria) },
+  { id: 'sem-planilha',       label: '📋 Sem Planilha Recebida',       check: r => _vazio(r.planilha) },
+  { id: 'sem-procuracao',     label: '📄 Sem Procuração',              check: r => _vazio(r.procuracao) },
+  { id: 'sem-soc',            label: '💻 Sem Cadastro SOC',            check: r => _vazio(r.soc) },
+  { id: 'sem-checklist',      label: '✅ Sem Checklist',               check: r => _vazio(r.checklist) },
+  { id: 'sem-nr1psico',       label: '🧠 Sem NR1 Psico',               check: r => _vazio(r.nr1psico) },
+  { id: 'sem-nr1rel',         label: '📝 Sem NR1 Relatório',           check: r => _vazio(r.nr1rel) },
+  { id: 'sem-ghe',            label: '⚙️ Sem Cadastro GHE',            check: r => _vazio(r.ghe) },
+  { id: 'sem-pdf',            label: '📑 Sem Emissão PDF',             check: r => _vazio(r.emissaoPdf) },
+  { id: 'sem-pgto2',          label: '💰 Sem 2ª Parcela',              check: r => _vazio(r.pgto2) },
+  { id: 'sem-envio',          label: '📨 Sem Envio PDF',               check: r => _vazio(r.envioPdf) },
+  { id: 'sem-dataReuniao',    label: '🗓️ Sem Data Reunião Entrega',   check: r => _vazio(r.dataReuniao) },
+  { id: 'sem-eventos',        label: '📤 Sem Envio Eventos',           check: r => _vazio(r.eventos) },
+  { id: 'atrasadas',          label: '🚨 Atrasadas (+20 dias)',        check: r => calcDiasContrato(r) > 20 },
 ];
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
@@ -1540,14 +1572,14 @@ function openAlertas() {
 function closeAlertas() { document.getElementById('modal-alertas').classList.remove('open'); }
 
 // ─── RELATÓRIO POR PENDÊNCIA ──────────────────────────────────────────────────
-let relFiltroAtivo = null;
+let relFiltrosAtivos = [];  // agora vários filtros podem estar ativos ao mesmo tempo
 
 function resetRelatorio() {
-  relFiltroAtivo = null;
+  relFiltrosAtivos = [];
   renderRelFiltros();
   // reseta o wrap (container principal da tabela)
   const wrap = document.getElementById('rel-wrap');
-  if (wrap) wrap.innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
+  if (wrap) wrap.innerHTML = '<div class="rel-empty">Selecione uma ou mais pendências, ou use o PROCV acima para buscar</div>';
   // reseta o div interno se existir
   const res = document.getElementById('rel-results');
   if (res) res.innerHTML = '';
@@ -1575,7 +1607,7 @@ function renderRelFiltros() {
   const wrap = document.getElementById('rel-filters');
   wrap.innerHTML = PENDENCIAS.map(p => {
     const count = records.filter(r => !r.finalizado && p.check(r)).length;
-    const active = relFiltroAtivo === p.id ? 'active' : '';
+    const active = relFiltrosAtivos.includes(p.id) ? 'active' : '';
     return `<button class="rel-btn ${active}" onclick="aplicarRelFiltro('${p.id}')">${p.label} <b>(${count})</b></button>`;
   }).join('');
 }
@@ -1587,6 +1619,26 @@ function fmtD(v) {
     return d+'/'+m+'/'+y;
   }
   return v;
+}
+
+// Lista as pendências (campos vazios) de uma empresa, em texto curto.
+// Se houver filtros selecionados, mostra só as pendências relevantes a eles;
+// senão, varre todas as pendências possíveis.
+function pendenciasDoRegistro(r) {
+  const base = (relFiltrosAtivos && relFiltrosAtivos.length > 0)
+    ? PENDENCIAS.filter(p => relFiltrosAtivos.includes(p.id))
+    : PENDENCIAS;
+  const nomeCurto = {
+    'sem-respComercial':'Resp. Comercial','sem-respDoc':'Resp. Doc','sem-dataContrato':'Data Contrato',
+    'sem-pgtoSinal':'Pgto Sinal','sem-tipoContrato':'Tipo Contrato','sem-tipoServico':'Tipo Serviço',
+    'sem-empresa':'Empresa','sem-fantasia':'Fantasia','sem-cnpj':'CNPJ','sem-videoIntegracao':'Vídeo Integração',
+    'sem-vistoria':'Data Vistoria','sem-bairro':'Bairro','sem-respVistoria':'Resp. Vistoria',
+    'sem-contatoVistoria':'Contato Vistoria','sem-planilha':'Planilha','sem-procuracao':'Procuração',
+    'sem-soc':'SOC','sem-checklist':'Checklist','sem-nr1psico':'NR1 Psico','sem-nr1rel':'NR1 Relatório',
+    'sem-ghe':'GHE','sem-pdf':'Emissão PDF','sem-pgto2':'2ª Parcela','sem-envio':'Envio PDF',
+    'sem-dataReuniao':'Reunião Entrega','sem-eventos':'Envio Eventos','atrasadas':'Atrasada'
+  };
+  return base.filter(p => p.check(r)).map(p => nomeCurto[p.id] || p.label);
 }
 
 function renderRelTabela(resultados, titulo) {
@@ -1601,7 +1653,7 @@ function renderRelTabela(resultados, titulo) {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
   const thead = `<thead><tr>
-    <th>#</th><th>EMPRESA</th><th>FANTASIA</th><th>CNPJ</th><th>TIPO SERVIÇO</th><th>VÍDEO INTEGRAÇÃO</th><th>BAIRRO</th>
+    <th>#</th><th>EMPRESA</th><th>⚠️ PENDÊNCIAS</th><th>FANTASIA</th><th>CNPJ</th><th>TIPO SERVIÇO</th><th>VÍDEO INTEGRAÇÃO</th><th>BAIRRO</th>
     <th>RESP COMERCIAL</th><th>RESP DOC</th><th>DATA CONTRATO</th><th>DIAS</th>
     <th>PGTO SINAL</th><th>TIPO CONTRATO</th><th>DATA VISTORIA</th>
     <th>RESP VISTORIA</th><th>CONTATO VISTORIA</th><th>PLANILHA</th>
@@ -1616,6 +1668,7 @@ function renderRelTabela(resultados, titulo) {
     return `<tr>
       <td style="color:#6b7280;font-size:10px">${i+1}</td>
       <td><b>${esc(r.empresa||'—')}</b></td>
+      <td style="font-size:10px;color:#b91c1c;font-weight:600">${esc(pendenciasDoRegistro(r).join(', ')||'—')}</td>
       <td>${esc(r.fantasia||'—')}</td>
       <td>${esc(r.cnpj||'—')}</td>
       <td>${esc(r.tipoServico||'—')}</td>
@@ -1645,11 +1698,16 @@ function renderRelTabela(resultados, titulo) {
     </tr>`;
   }).join('')}</tbody>`;
 
+  // guarda o resultado atual para exportação
+  relResultadoAtual = resultados;
+  relTituloAtual = titulo;
+
   // Barra de ações FORA do wrap (não interfere no sticky do thead)
   const relCount = document.getElementById('rel-count');
   if (relCount) relCount.innerHTML =
     `${resultados.length} empresa(s) — ${titulo}
-     &nbsp;<button onclick="imprimirRelatorio()" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>`;
+     &nbsp;<button onclick="imprimirRelatorio()" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
+     &nbsp;<button onclick="exportarRelatorioExcel()" style="background:#15803d;color:#fff;border:none;border-radius:8px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer">📊 Exportar Excel</button>`;
 
   // Tabela diretamente no wrap — thead sticky funciona
   if (wrap) wrap.innerHTML = `<table class="rel-table">${thead}${tbody}</table>`;
@@ -1658,6 +1716,65 @@ function renderRelTabela(resultados, titulo) {
   let pa = document.getElementById('print-area');
   if (!pa) { pa = document.createElement('div'); pa.id = 'print-area'; document.body.appendChild(pa); }
   pa.innerHTML = `<div class="print-header"><h2>📊 Relatório — ${titulo}</h2><p>${resultados.length} empresa(s) · ${hoje}</p></div><table>${thead}${tbody}</table>`;
+}
+
+let relResultadoAtual = [];
+let relTituloAtual = '';
+
+function exportarRelatorioExcel() {
+  if (!relResultadoAtual || relResultadoAtual.length === 0) {
+    alert('Não há dados para exportar. Selecione uma pendência primeiro.');
+    return;
+  }
+  // Cabeçalhos de TODAS as colunas (mesma ordem da página inicial)
+  const colunas = [
+    ['empresa','Empresa'],['__pend','Pendências'],['fantasia','Nome Fantasia'],['cnpj','CNPJ'],
+    ['tipoServico','Tipo Serviço'],['videoIntegracao','Vídeo Integração'],['bairro','Bairro'],
+    ['respComercial','Resp. Comercial'],['respDoc','Resp. Doc'],['dataContrato','Data Contrato'],
+    ['pgtoSinal','Pgto do Sinal'],['tipoContrato','Tipo Contrato'],['dataVistoria','Data Vistoria'],
+    ['respVistoria','Resp. Vistoria'],['contatoVistoria','Contato da Vistoria'],
+    ['planilha','Planilha Recebida'],['procuracao','Procuração'],['soc','Cadastro no SOC'],
+    ['checklist','Checklist'],['nr1psico','NR1 Psico'],['nr1rel','NR1 Relatório'],
+    ['ghe','Cadastro GHE e Riscos'],['emissaoPdf','Emissão PDF'],['pgto2','Pgto 2 Parcela'],
+    ['envioPdf','Envio PDF'],['dataReuniao','Data Reunião de Entrega'],['eventos','Envio Eventos']
+  ];
+  // Monta linhas: primeira é o cabeçalho
+  const aoa = [colunas.map(c => c[1])];
+  relResultadoAtual.forEach(r => {
+    aoa.push(colunas.map(([campo]) => {
+      if (campo === '__pend') return pendenciasDoRegistro(r).join(', ');
+      let v = r[campo];
+      if (v === undefined || v === null) v = '';
+      // datas em formato bonito
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) { const [y,m,d]=v.split('-'); v = d+'/'+m+'/'+y; }
+      return v;
+    }));
+  });
+  // Usa a versão com cores se disponível; senão, a normal (sem cor, mas funciona)
+  const XL = window.XLSX_STYLE || window.XLSX;
+  const ws = XL.utils.aoa_to_sheet(aoa);
+
+  // Cor VERMELHA na coluna "Pendências" (2ª coluna = índice 1).
+  const nLinhas = aoa.length;
+  for (let linha = 0; linha < nLinhas; linha++) {
+    const ref = XL.utils.encode_cell({ r: linha, c: 1 });
+    if (!ws[ref]) continue;
+    ws[ref].s = {
+      font: { color: { rgb: 'C00000' }, bold: linha === 0 },
+      alignment: { vertical: 'center', wrapText: true }
+    };
+  }
+  // Largura das colunas (empresa e pendências mais largas)
+  ws['!cols'] = colunas.map((c, i) => ({ wch: i === 0 ? 32 : (i === 1 ? 38 : 16) }));
+
+  const wb = XL.utils.book_new();
+  XL.utils.book_append_sheet(wb, ws, 'Relatório');
+  const dt = new Date();
+  const nome = 'relatorio_pendencias_' +
+    dt.getFullYear() + String(dt.getMonth()+1).padStart(2,'0') + String(dt.getDate()).padStart(2,'0') +
+    '_' + String(dt.getHours()).padStart(2,'0') + String(dt.getMinutes()).padStart(2,'0') + '.xlsx';
+  XL.writeFile(wb, nome);
+  toast('📊 Excel exportado: ' + relResultadoAtual.length + ' empresa(s)');
 }
 
 function imprimirRelatorio() {
@@ -1700,13 +1817,26 @@ function setupRelScroll() {
 }
 
 function aplicarRelFiltro(id) {
-  relFiltroAtivo = id;
+  // alterna o filtro: se já está ativo, desliga; senão, liga
+  const pos = relFiltrosAtivos.indexOf(id);
+  if (pos >= 0) relFiltrosAtivos.splice(pos, 1);
+  else relFiltrosAtivos.push(id);
+
   document.getElementById('procv-input').value = '';
   renderRelFiltros();
-  const pend = PENDENCIAS.find(p => p.id === id);
-  if (!pend) return;
-  const resultados = records.filter(r => !r.finalizado && pend.check(r));
-  renderRelTabela(resultados, pend.label);
+
+  if (relFiltrosAtivos.length === 0) {
+    const wrap = document.getElementById('rel-wrap');
+    if (wrap) wrap.innerHTML = '<div class="rel-empty">Selecione uma ou mais pendências, ou use o PROCV acima para buscar</div>';
+    document.getElementById('rel-count').textContent = '';
+    return;
+  }
+
+  // empresas que atendem A TODAS as pendências selecionadas
+  const pendsSel = PENDENCIAS.filter(p => relFiltrosAtivos.includes(p.id));
+  const resultados = records.filter(r => !r.finalizado && pendsSel.every(p => p.check(r)));
+  const titulo = pendsSel.map(p => p.label).join(' + ');
+  renderRelTabela(resultados, titulo);
 }
 
 // PROCV — busca livre em todas as colunas ou coluna específica
@@ -1714,13 +1844,13 @@ function aplicarProcv() {
   const q = (document.getElementById('procv-input').value || '').toLowerCase().trim();
   const col = document.getElementById('procv-col').value;
   if (!q) {
-    relFiltroAtivo = null;
+    relFiltrosAtivos = [];
     renderRelFiltros();
-    document.getElementById('rel-results').innerHTML = '<div class="rel-empty">Selecione uma pendência ou use o PROCV acima para buscar</div>';
+    document.getElementById('rel-results').innerHTML = '<div class="rel-empty">Selecione uma ou mais pendências, ou use o PROCV acima para buscar</div>';
     document.getElementById('rel-count').textContent = '';
     return;
   }
-  relFiltroAtivo = null;
+  relFiltrosAtivos = [];
   renderRelFiltros();
   const CAMPOS = {
     empresa: r => r.empresa, fantasia: r => r.fantasia, bairro: r => r.bairro,
